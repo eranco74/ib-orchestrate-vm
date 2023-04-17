@@ -1,0 +1,30 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: node-ip
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    storage:
+      files:
+        - contents:
+            source: data:text/plain;charset=utf-8;base64,IyEvdXNyL2Jpbi9iYXNoCgojIFRoaXMgc2NyaXB0IHdpbGwgb25seSBiZSBwcmVzZW50IGluIG5vZGVzIHRoYXQgZG9uJ3QgaGF2ZSBhbiBpbnRlcm5hbCBOSUMuIEZvciB0aG9zZSBub2RlcyB3ZSBuZWVkCiMgdG8gYWRkIHRoZSBpbnRlcm5hbCBJUCB0byB0aGUgZXh0ZXJuYWwgYGJyLWV4YCBicmlkZ2UgdXNlZCBieSBPVlM6CmludGVybmFsX2lwPSIxOTIuMTY4LjEyNi4xMC8yNCIKbm1jbGkgY29ubmVjdGlvbiBtb2RpZnkgYnItZXggK2lwdjQuYWRkcmVzc2VzICIke2ludGVybmFsX2lwfSIgaXB2NC5tZXRob2QgYXV0bwppcCBhZGRyIGFkZCAiJHtpbnRlcm5hbF9pcH0iIGRldiBici1leAo=
+            verification: {}
+          filesystem: root
+          mode: 365
+          path: /etc/NetworkManager/dispatcher.d/pre-up.d/20-test
+        - contents:
+            source: data:text/plain;charset=utf-8;base64,W1NlcnZpY2VdCkVudmlyb25tZW50PSJLVUJFTEVUX05PREVfSVA9MTkyLjE2OC4xMjYuMTAiICJLVUJFTEVUX05PREVfSVBTPTE5Mi4xNjguMTI2LjEwIg==
+            verification: {}
+          filesystem: root
+          mode: 420
+          path: /etc/systemd/system/kubelet.service.d/30-nodenet.conf
+        - contents:
+            source: data:text/plain;charset=utf-8;base64,W1NlcnZpY2VdCkVudmlyb25tZW50PSJDT05UQUlORVJfU1RSRUFNX0FERFJFU1M9MTkyLjE2OC4xMjYuMTAi
+            verification: {}
+          filesystem: root
+          mode: 420
+          path: /etc/systemd/system/crio.service.d/30-nodenet.conf

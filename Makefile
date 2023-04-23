@@ -45,7 +45,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake create-image-template
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT)
 
 .SILENT: destroy-libvirt
 
@@ -57,6 +57,12 @@ bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)
 	git clone https://github.com/eranco74/bootstrap-in-place-poc
 
+wait-for-install-complete:
+	echo "Waiting for installation to complete"
+	until [ "$$(oc get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
+			echo "Still waiting for installation to complete ..."; \
+			sleep 10; \
+	done
 
 ### Bake the image template
 
@@ -64,7 +70,7 @@ bake:
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/node-ip.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/installation-configuration.yaml
 	# TODO: add this once we have the bootstrap script
-	# make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
+	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
 	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
 	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
 	sleep 60 && sudo virsh destroy sno-test

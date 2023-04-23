@@ -45,7 +45,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake create-image-template
 
 .SILENT: destroy-libvirt
 
@@ -62,10 +62,17 @@ bootstrap-in-place-poc:
 
 bake:
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/node-ip.yaml
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/installation-configuration.yaml
 	# TODO: add this once we have the bootstrap script
 	# make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
 	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
+	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
+	sleep 60 && sudo virsh destroy sno-test
 	make wait-for-shutdown
+
+# Generate installation-configuration machine config that will create the service that reconfigure the node.
+bake/installation-configuration.yaml: installation-configuration.sh
+	docker run -i -v ./installation-configuration.sh:/scripts/installation-configuration.sh  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane.yaml > $@
 
 wait-for-shutdown:
 	until sudo virsh domstate sno-test | grep shut; do \
@@ -74,6 +81,8 @@ wait-for-shutdown:
     done
 
 ### Create new image from template
+create-image-template: $(IMAGE_PATH_SNO_IN_LIBVIRT)
+
 $(IMAGE_PATH_SNO_IN_LIBVIRT): $(BASE_IMAGE_PATH_SNO)
 	sudo cp $< $@
 	sudo chown qemu:qemu $@

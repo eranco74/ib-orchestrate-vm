@@ -66,11 +66,12 @@ wait-for-install-complete:
 
 ### Bake the image template
 
-bake:
+bake: bake/installation-configuration.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/node-ip.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/installation-configuration.yaml
 	# TODO: add this once we have the bootstrap script
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
+	# TODO: wait for mcp
 	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
 	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
 	sleep 60 && sudo virsh destroy sno-test
@@ -119,6 +120,12 @@ start-vm: $(IMAGE_PATH_SNO_IN_LIBVIRT) network
 
 ssh: $(SSH_KEY_PRIV_PATH)
 	ssh $(SSH_FLAGS) $(SSH_HOST)
+
+
+configure:
+	echo CLUSTER_NAME=${CLUSTER_NAME} >> site-config
+	echo DOMAIN=${DOMAIN} >> site-config
+	cat site-config | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /opt/openshift/site-config.env"
 
 ### Cleanup
 

@@ -31,4 +31,9 @@ This will apply machine configs to the SNO instance, shut it down and copy the i
 make start-vm
 ```
 
-
+- Reconfigure the new SNO instance with the site specific config:
+```bash
+make configure CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
+```
+This will create the site-config file at /op/openshift/site-config, once this file exists the reconfiguration process starts.
+- You can now monitor the progress using `make ssh` and `journalctl -f -u image-base-configuration.service`

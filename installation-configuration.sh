@@ -16,8 +16,8 @@ source ${CONFIGURATION_FILE}
 set +o allexport
 
 
-if [ -z ${NAME+x} ]; then
-	echo "Please set NAME"
+if [ -z ${CLUSTER_NAME+x} ]; then
+	echo "Please set CLUSTER_NAME"
 	exit 1
 fi
 
@@ -51,31 +51,35 @@ wait_for_api
 # Reconfigure DNS
 
 create_cert(){
-  openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key-$1.pem -out cert-$1.pem \
-  -subj "/CN=$2" -addext "subjectAltName = DNS:$2"
+  if [ ! -f $1.done ]
+  then
+    openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key-$1.pem -out cert-$1.pem \
+    -subj "/CN=$2" -addext "subjectAltName = DNS:$2"
 
-  oc create secret tls $1-tls --cert=cert-$1.pem --key=key-$1.pem -n openshift-config
+    oc create secret tls $1-tls --cert=cert-$1.pem --key=key-$1.pem -n openshift-config
+    touch $1.done
+  fi
 }
 
-create_cert "console" "console-openshift-console.apps.${NAME}.${DOMAIN}"
-create_cert "oauth" "oauth-openshift.apps.${NAME}.${DOMAIN}"
-create_cert "api" "api.${NAME}.${DOMAIN}"
+create_cert "console" "console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}"
+create_cert "oauth" "oauth-openshift.apps.${CLUSTER_NAME}.${DOMAIN}"
+create_cert "api" "api.${CLUSTER_NAME}.${DOMAIN}"
 
 echo "Update ingress"
 envsubst << "EOF" >> domain.patch
 spec:
   componentRoutes:
-  - hostname: console-openshift-console.apps.${NAME}.${DOMAIN}
+  - hostname: console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}
     name: console
     namespace: openshift-console
     servingCertKeyPairSecret:
       name: console-tls
-  - hostname: oauth-openshift.apps.${NAME}.${DOMAIN}
+  - hostname: oauth-openshift.apps.${CLUSTER_NAME}.${DOMAIN}
     name: oauth-openshift
     namespace: openshift-authentication
     servingCertKeyPairSecret:
       name: oauth-tls
-  domain: apps.${NAME}.${DOMAIN}
+  domain: apps.${CLUSTER_NAME}.${DOMAIN}
 EOF
 
 oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge
@@ -90,7 +94,7 @@ spec:
   servingCerts:
     namedCertificates:
     - names:
-      - api.${NAME}.${DOMAIN}
+      - api.${CLUSTER_NAME}.${DOMAIN}
       servingCertificate:
         name: api-secret
 EOF

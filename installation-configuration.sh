@@ -2,6 +2,7 @@
 set -euoE pipefail ## -E option will cause functions to inherit trap
 
 echo "Reconfiguring single node OpenShift"
+
 CONFIGURATION_FILE=/opt/openshift/site-config.env
 echo "Waiting for ${CONFIGURATION_FILE}"
 while [ ! -e ${CONFIGURATION_FILE} ]
@@ -105,3 +106,6 @@ oc patch apiserver cluster --patch-file api.patch --type=merge
 # TODO: Update pullSecret
 # TODO: Update ssh-key
 # TODO: update ICSP(s)
+
+rm -rf /opt/openshift
+systemctl disable image-base-configuration.service

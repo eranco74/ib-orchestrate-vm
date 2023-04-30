@@ -66,12 +66,14 @@ wait-for-install-complete:
 
 ### Bake the image template
 
-bake: bake/installation-configuration.yaml
+bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/node-ip.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/installation-configuration.yaml
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/dnsmasq.yaml
 	# TODO: add this once we have the bootstrap script
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
 	# wait for mcp to update
+	sleep 10
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=120s --for=condition=updated=true mcp master
 	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
 	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
@@ -79,8 +81,12 @@ bake: bake/installation-configuration.yaml
 	make wait-for-shutdown
 
 # Generate installation-configuration machine config that will create the service that reconfigure the node.
-bake/installation-configuration.yaml: installation-configuration.sh
-	docker run -i -v ./installation-configuration.sh:/scripts/installation-configuration.sh  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane.yaml > $@
+bake/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml
+	docker run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@
+
+bake/dnsmasq.yaml: bake/dnsmasq.yaml bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
+	docker run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@
+
 
 wait-for-shutdown:
 	until sudo virsh domstate sno-test | grep shut; do \

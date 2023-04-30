@@ -1,0 +1,38 @@
+variant: openshift
+version: 4.13.0
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 50-master-dnsmasq-configuration
+storage:
+  files:
+    - contents:
+        local: dnsmasq.conf
+      mode: 420
+      path: /etc/dnsmasq.d/single-node.conf
+      overwrite: true
+    - contents:
+        local: force-dns-script
+      mode: 365
+      path: /etc/NetworkManager/dispatcher.d/forcedns
+      overwrite: true
+    - contents:
+        local: unmanaged-resolv.conf
+      mode: 420
+      path: /etc/NetworkManager/conf.d/single-node.conf
+      overwrite: true
+systemd:
+  units:
+    - name: dnsmasq.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Run dnsmasq to provide local dns for Single Node OpenShift
+        Before=kubelet.service crio.service
+        After=network.target
+
+        [Service]
+        ExecStart=/usr/sbin/dnsmasq -k
+
+        [Install]
+        WantedBy=multi-user.target

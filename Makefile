@@ -131,7 +131,7 @@ ssh: $(SSH_KEY_PRIV_PATH)
 
 configure:
 	echo CLUSTER_NAME=${CLUSTER_NAME} > site-config
-	echo DOMAIN=${DOMAIN} >> site-config
+	echo BASE_DOMAIN=${BASE_DOMAIN} >> site-config
 	cat site-config | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /opt/openshift/site-config.env"
 
 ### Cleanup

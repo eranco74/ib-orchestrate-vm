@@ -22,8 +22,8 @@ if [ -z ${CLUSTER_NAME+x} ]; then
 	exit 1
 fi
 
-if [ -z ${DOMAIN+x} ]; then
-	echo "Please set DOMAIN"
+if [ -z ${BASE_DOMAIN+x} ]; then
+	echo "Please set BASE_DOMAIN"
 	exit 1
 fi
 
@@ -32,7 +32,6 @@ fi
 # TODO: Regenerate/update certificates
 
 echo "Starting kubelet"
-systemctl enable kubelet
 systemctl start kubelet
 
 #TODO: we need to add kubeconfig to the node for the configuration stage
@@ -62,25 +61,25 @@ create_cert(){
   fi
 }
 
-create_cert "console" "console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}"
-create_cert "oauth" "oauth-openshift.apps.${CLUSTER_NAME}.${DOMAIN}"
-create_cert "api" "api.${CLUSTER_NAME}.${DOMAIN}"
+create_cert "console" "console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
+create_cert "oauth" "oauth-openshift.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
+create_cert "api" "api.${CLUSTER_NAME}.${BASE_DOMAIN}"
 
 echo "Update ingress"
 envsubst << "EOF" >> domain.patch
 spec:
   componentRoutes:
-  - hostname: console-openshift-console.apps.${CLUSTER_NAME}.${DOMAIN}
+  - hostname: console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
     name: console
     namespace: openshift-console
     servingCertKeyPairSecret:
       name: console-tls
-  - hostname: oauth-openshift.apps.${CLUSTER_NAME}.${DOMAIN}
+  - hostname: oauth-openshift.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
     name: oauth-openshift
     namespace: openshift-authentication
     servingCertKeyPairSecret:
       name: oauth-tls
-  domain: apps.${CLUSTER_NAME}.${DOMAIN}
+  domain: apps.${CLUSTER_NAME}.${BASE_DOMAIN}
 EOF
 
 oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge
@@ -95,7 +94,7 @@ spec:
   servingCerts:
     namedCertificates:
     - names:
-      - api.${CLUSTER_NAME}.${DOMAIN}
+      - api.${CLUSTER_NAME}.${BASE_DOMAIN}
       servingCertificate:
         name: api-secret
 EOF
@@ -109,3 +108,4 @@ oc patch apiserver cluster --patch-file api.patch --type=merge
 
 rm -rf /opt/openshift
 systemctl disable image-base-configuration.service
+systemctl enable kubelet

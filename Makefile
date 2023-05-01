@@ -74,7 +74,7 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
 	# wait for mcp to update
 	sleep 10
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=120s --for=condition=updated=true mcp master
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=10m --for=condition=updated=true mcp master
 	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
 	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
 	sleep 60 && sudo virsh destroy sno-test

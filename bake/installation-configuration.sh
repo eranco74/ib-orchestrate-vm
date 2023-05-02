@@ -96,7 +96,7 @@ spec:
     - names:
       - api.${CLUSTER_NAME}.${BASE_DOMAIN}
       servingCertificate:
-        name: api-secret
+        name: api-tls
 EOF
 
 oc patch apiserver cluster --patch-file api.patch --type=merge

@@ -79,7 +79,6 @@ spec:
     namespace: openshift-authentication
     servingCertKeyPairSecret:
       name: oauth-tls
-  domain: apps.${CLUSTER_NAME}.${BASE_DOMAIN}
 EOF
 
 oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge

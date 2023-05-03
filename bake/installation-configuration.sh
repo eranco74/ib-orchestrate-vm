@@ -102,6 +102,20 @@ oc patch apiserver cluster --patch-file api.patch --type=merge
 
 # TODO: check that API got updated
 # TODO: Update pullSecret
+
+# TODO: should we verify the pull secret is valid? how?
+if [ -z ${PULL_SECRET+x} ]; then
+	echo "PULL_SECRET not defined"
+else
+  echo "Overriding PULL_SECRET"
+  echo "$PULL_SECRET" > ps.json
+  oc set data secret/pull-secret -n openshift-config --from-file=.dockerconfigjson=ps.json
+
+fi
+# If we want to create additional pull secret
+# oc create secret -n openshift-config generic foo-secret --type=kubernetes.io/dockerconfigjson -from-file=.dockerconfigjson=ps.json
+
+
 # TODO: Update ssh-key
 # TODO: update ICSP(s)
 

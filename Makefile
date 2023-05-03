@@ -132,7 +132,13 @@ ssh: $(SSH_KEY_PRIV_PATH)
 configure:
 	echo CLUSTER_NAME=${CLUSTER_NAME} > site-config
 	echo BASE_DOMAIN=${BASE_DOMAIN} >> site-config
+	echo PULL_SECRET=${PULL_SECRET} >> site-config
 	cat site-config | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /opt/openshift/site-config.env"
+
+update_script:
+	cat bake/installation-configuration.sh | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /usr/local/bin/installation-configuration.sh"
+	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl daemon-reload"
+	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl restart image-base-configuration.service --no-block"
 
 ### Cleanup
 

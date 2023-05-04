@@ -68,6 +68,7 @@ create_cert "api" "api.${CLUSTER_NAME}.${BASE_DOMAIN}"
 echo "Update ingress"
 envsubst << "EOF" >> domain.patch
 spec:
+  appsDomain: apps.${CLUSTER_NAME}.${BASE_DOMAIN}
   componentRoutes:
   - hostname: console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
     name: console

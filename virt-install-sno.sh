@@ -15,6 +15,11 @@ if [ -z ${NET_NAME+x} ]; then
 	exit 1
 fi
 
+if [ -z ${SITE_CONFIG+x} ]; then
+	echo "Please set the SITE_CONFIG"
+	exit 1
+fi
+
 OS_VARIANT="rhel8.1"
 RAM_MB="${RAM_MB:-16384}"
 DISK_GB="${DISK_GB:-35}"
@@ -31,6 +36,7 @@ nohup virt-install \
     --network=network:${NET_NAME},mac=52:54:00:ee:42:e2 \
     --graphics=none \
     --disk "size=${DISK_GB},backing_store=${IMAGE}" \
+    --cdrom "${SITE_CONFIG}" \
     --events on_reboot=restart \
     --boot hd,cdrom \
     --noautoconsole \

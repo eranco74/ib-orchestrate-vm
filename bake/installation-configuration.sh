@@ -3,12 +3,37 @@ set -euoE pipefail ## -E option will cause functions to inherit trap
 
 echo "Reconfiguring single node OpenShift"
 
+
+
+function mount_config {
+  echo "Mounting config iso"
+  mkdir /mnt/config
+  mount /dev/$1 /mnt/config
+  ls /mnt/config
+}
+
+function umount_config {
+  echo "Unmounting config iso"
+  umount /dev/$1
+  rm -rf /mnt/config
+}
+
 CONFIGURATION_FILE=/opt/openshift/site-config.env
 echo "Waiting for ${CONFIGURATION_FILE}"
-while [ ! -e ${CONFIGURATION_FILE} ]
-do
+while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name') && ! -f /opt/openshift/site-config.env ]]; do echo hi;  sleep 5; donedo
   sleep 5
 done
+
+DEVICE=$(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name')
+if [[ -n ${DEVICE+x} ]]; then
+  mount_config "${DEVICE}"
+  cp /mnt/config/site-config.env ${CONFIGURATION_FILE}
+fi
+
+if [ ! -f "${CONFIGURATION_FILE}" ]; then
+  echo "Failed to find configuration file at ${CONFIGURATION_FILE}"
+  exit 1
+fi
 
 echo "${CONFIGURATION_FILE} has been created"
 
@@ -111,7 +136,6 @@ else
   echo "Overriding PULL_SECRET"
   echo "$PULL_SECRET" > ps.json
   oc set data secret/pull-secret -n openshift-config --from-file=.dockerconfigjson=ps.json
-
 fi
 # If we want to create additional pull secret
 # oc create secret -n openshift-config generic foo-secret --type=kubernetes.io/dockerconfigjson -from-file=.dockerconfigjson=ps.json
@@ -121,5 +145,8 @@ fi
 # TODO: update ICSP(s)
 
 rm -rf /opt/openshift
-systemctl disable image-base-configuration.service
 systemctl enable kubelet
+systemctl disable image-base-configuration.service
+if [[ -n ${DEVICE+x} ]]; then
+  umount_config "${DEVICE}"
+fi

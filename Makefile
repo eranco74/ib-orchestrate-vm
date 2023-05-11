@@ -10,6 +10,7 @@ SNO_DIR = ./bootstrap-in-place-poc
 LIBVIRT_IMAGE_PATH = /var/lib/libvirt/images
 BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/sno-test.qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
+SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
 
 MACHINE_NETWORK ?= 192.168.128.0/24
 CLUSTER_NAME ?= test-cluster
@@ -45,7 +46,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG)
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) config-dir
 
 .SILENT: destroy-libvirt
 
@@ -119,21 +120,28 @@ network: destroy-libvirt $(NET_CONFIG)
 	$(SNO_DIR)/virt-create-net.sh
 
 # Destroy previously created VMs/Networks and create a VM/Network with the pre-baked image
-start-vm: $(IMAGE_PATH_SNO_IN_LIBVIRT) network
+start-vm: $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LIBVIRT)
 	IMAGE=$(IMAGE_PATH_SNO_IN_LIBVIRT) \
 	VM_NAME=$(VM_NAME) \
 	NET_NAME=$(NET_NAME) \
+	SITE_CONFIG=$(SITE_CONFIG_PATH_IN_LIBVIRT) \
 	$(IMAGE_BASED_DIR)/virt-install-sno.sh
 
 ssh: $(SSH_KEY_PRIV_PATH)
 	ssh $(SSH_FLAGS) $(SSH_HOST)
 
+config-dir:
+	echo CLUSTER_NAME=${CLUSTER_NAME} > $@/site-config.env
+	echo BASE_DOMAIN=${BASE_DOMAIN} >> $@/site-config.env
+	echo PULL_SECRET=${PULL_SECRET} >> $@/site-config.env
 
-configure:
-	echo CLUSTER_NAME=${CLUSTER_NAME} > site-config
-	echo BASE_DOMAIN=${BASE_DOMAIN} >> site-config
-	echo PULL_SECRET=${PULL_SECRET} >> site-config
-	cat site-config | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /opt/openshift/site-config.env"
+site-config.iso: config-dir
+	mkisofs -o site-config.iso -R -V "ZTC SNO" /home/eran/go/src/github/eranco74/image-based-installation-poc/config-dir/
+
+$(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
+	sudo cp site-config.iso /var/lib/libvirt/images/
+	sudo chown qemu:qemu /var/lib/libvirt/images/site-config.iso
+	sudo restorecon /var/lib/libvirt/images/site-config.iso
 
 update_script:
 	cat bake/installation-configuration.sh | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /usr/local/bin/installation-configuration.sh"

@@ -18,7 +18,7 @@ storage:
         local: pre-network-manager-config.sh
 systemd:
   units:
-    - name: image-base-configuration.service
+    - name: installation-configuration.service
       enabled: true
       contents: |
         [Unit]

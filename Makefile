@@ -136,7 +136,7 @@ config-dir:
 	echo PULL_SECRET=${PULL_SECRET} >> $@/site-config.env
 
 site-config.iso: config-dir
-	mkisofs -o site-config.iso -R -V "ZTC SNO" /home/eran/go/src/github/eranco74/image-based-installation-poc/config-dir/
+	mkisofs -o site-config.iso -R -V "ZTC SNO" ./config-dir/
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 	sudo cp site-config.iso /var/lib/libvirt/images/
@@ -146,7 +146,7 @@ $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 update_script:
 	cat bake/installation-configuration.sh | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /usr/local/bin/installation-configuration.sh"
 	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl daemon-reload"
-	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl restart image-base-configuration.service --no-block"
+	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl restart installation-configuration.service --no-block"
 
 ### Cleanup
 

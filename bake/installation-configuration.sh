@@ -146,7 +146,7 @@ fi
 
 rm -rf /opt/openshift
 systemctl enable kubelet
-systemctl disable image-base-configuration.service
+systemctl disable installation-configuration.service
 if [[ -n ${DEVICE+x} ]]; then
   umount_config "${DEVICE}"
 fi

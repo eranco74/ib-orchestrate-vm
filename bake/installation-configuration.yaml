@@ -30,4 +30,4 @@ spec:
             [Install]
             WantedBy=multi-user.target
           enabled: true
-          name: image-base-configuration.service
+          name: installation-configuration.service

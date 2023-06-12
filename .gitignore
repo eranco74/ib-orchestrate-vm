@@ -4,4 +4,5 @@ bootstrap-in-place-poc
 /nohup.out
 /ssh-key/
 /site-config.iso
-
+/bake/installation-configuration.yaml
+/config-dir/

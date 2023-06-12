@@ -11,11 +11,6 @@ storage:
       overwrite: true
       contents:
         local: installation-configuration.sh
-    - path: /usr/local/bin/pre-network-manager-config.sh
-      mode: 493
-      overwrite: true
-      contents:
-        local: pre-network-manager-config.sh
 systemd:
   units:
     - name: installation-configuration.service
@@ -24,7 +19,6 @@ systemd:
         [Unit]
         Description=Image base SNO configuration script
         [Service]
-        WorkingDirectory=/opt/openshift
         Type=oneshot
         RemainAfterExit=yes
         ExecStart=/usr/local/bin/installation-configuration.sh

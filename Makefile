@@ -3,9 +3,14 @@ MAKEFLAGS += --no-builtin-rules
 
 IMAGE_BASED_DIR = .
 SNO_DIR = ./bootstrap-in-place-poc
+CONFIG_DIR = ./config-dir
 
 ########################
 
+checkenv:
+ifndef PULL_SECRET
+	$(error PULL_SECRET must be defined)
+endif
 
 LIBVIRT_IMAGE_PATH = /var/lib/libvirt/images
 BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/sno-test.qcow2
@@ -46,7 +51,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) config-dir
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR)
 
 .SILENT: destroy-libvirt
 
@@ -75,7 +80,7 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
 	# wait for mcp to update
 	sleep 10
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=10m --for=condition=updated=true mcp master
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=20m --for=condition=updated=true mcp master
 	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
 	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
 	sleep 60 && sudo virsh destroy sno-test
@@ -83,10 +88,10 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 
 # Generate installation-configuration machine config that will create the service that reconfigure the node.
 bake/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml
-	docker run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@
+	podman run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@ || (rm $@ && false)
 
 bake/dnsmasq.yaml: bake/dnsmasq.yaml bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
-	docker run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@
+	podman run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@ || (rm $@ && false)
 
 
 wait-for-shutdown:
@@ -130,13 +135,19 @@ start-vm: $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LIBVIRT)
 ssh: $(SSH_KEY_PRIV_PATH)
 	ssh $(SSH_FLAGS) $(SSH_HOST)
 
-config-dir:
-	echo CLUSTER_NAME=${CLUSTER_NAME} > $@/site-config.env
-	echo BASE_DOMAIN=${BASE_DOMAIN} >> $@/site-config.env
-	echo PULL_SECRET=${PULL_SECRET} >> $@/site-config.env
+$(CONFIG_DIR):
+	mkdir -p $@
 
-site-config.iso: config-dir
-	mkisofs -o site-config.iso -R -V "ZTC SNO" ./config-dir/
+$(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
+	echo CLUSTER_NAME=${CLUSTER_NAME} > $@
+	echo BASE_DOMAIN=${BASE_DOMAIN} >> $@
+	echo -n PULL_SECRET= >> $@
+	echo -n "'" >> $@
+	echo -n "$${PULL_SECRET}" >> $@
+	echo -n "'" >> $@
+
+site-config.iso: $(CONFIG_DIR)/site-config.env
+	mkisofs -o site-config.iso -R -V "ZTC SNO" $<
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 	sudo cp site-config.iso /var/lib/libvirt/images/

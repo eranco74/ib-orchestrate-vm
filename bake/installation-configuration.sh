@@ -3,12 +3,15 @@ set -euoE pipefail ## -E option will cause functions to inherit trap
 
 echo "Reconfiguring single node OpenShift"
 
-
+mkdir -p /opt/openshift
+cd /opt/openshift
 
 function mount_config {
   echo "Mounting config iso"
-  mkdir /mnt/config
-  mount /dev/$1 /mnt/config
+  mkdir -p /mnt/config
+  if ! mountpoint --quiet /var/mnt/config; then
+      mount "/dev/$1" /mnt/config
+  fi
   ls /mnt/config
 }
 
@@ -38,7 +41,7 @@ fi
 echo "${CONFIGURATION_FILE} has been created"
 
 set -o allexport
-source ${CONFIGURATION_FILE}
+source "${CONFIGURATION_FILE}"
 set +o allexport
 
 
@@ -76,13 +79,13 @@ wait_for_api
 # Reconfigure DNS
 
 create_cert(){
-  if [ ! -f $1.done ]
+  if [ ! -f "$1.done" ]
   then
-    openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key-$1.pem -out cert-$1.pem \
+    openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key-"$1.pem" -out "cert-$1.pem" \
     -subj "/CN=$2" -addext "subjectAltName = DNS:$2"
 
-    oc create secret tls $1-tls --cert=cert-$1.pem --key=key-$1.pem -n openshift-config
-    touch $1.done
+    oc create secret tls "$1-tls" --cert=cert-"$1.pem" --key=key-"$1.pem" -n openshift-config
+    touch "$1.done"
   fi
 }
 

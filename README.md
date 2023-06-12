@@ -7,33 +7,33 @@ Note that single node OpenShift relocation is currently unsupported.
 
 ### Generate the image template
 Install SNO cluster with bootstrap-in-place:
-- Set PULL_SECRET environment variable to your pull secret
 
+- Set PULL_SECRET environment variable to your pull secret
 ```
 ```bash
 make start-iso
 ```
+
 monitor the progress using make ssh and journalctl -f -u bootkube.service or kubectl --kubeconfig ./sno-workdir/auth/kubeconfig get clusterversion.
 The kubeconfig file can be found in `.bootstrap-in-place/sno-workdir/auth/kubeconfig`
 
-Once the installation is complete create the image template:
+- Once the installation is complete create the image template:
 ```
 ```bash
 make bake
 ```
-This will apply machine configs to the SNO instance, shut it down and copy the image to:
-```
-/var/lib/libvirt/images/SNO-baked-image.qcow2
-```
+
+This will apply machine configs to the SNO instance and then shut it down
 
 - Create the site-config iso wiht the configuration for the SNO instance at edge site:
 ```bash
 make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 ```
-This will create the site-config.iso file, this iso will get attached to the instance and once the instance is booted the installation-configuration.service will scan the attached devices, 
+This will create the `site-config.iso` file, which will later get attached to the instance and once the instance is booted the installation-configuration.service will scan the attached devices, 
 mount the iso, read the configuration and start the reconfiguration process.
 
-- Create a new SNO instance from the SNO-baked-image:
+- To copy the previous VM's image into `/var/lib/libvirt/images/SNO-baked-image.qcow2` and then create a new SNO instance from it, with the `site-config.iso` attached, run:
+
 ```bash
 make start-vm
 ```

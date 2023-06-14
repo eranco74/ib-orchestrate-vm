@@ -23,7 +23,9 @@ function umount_config {
 
 CONFIGURATION_FILE=/opt/openshift/site-config.env
 echo "Waiting for ${CONFIGURATION_FILE}"
-while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name') && ! -f /opt/openshift/site-config.env ]]; do echo hi;  sleep 5; donedo
+while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name') && ! -f /opt/openshift/site-config.env ]];
+do
+  echo "Waiting for site-config"
   sleep 5
 done
 
@@ -39,7 +41,7 @@ if [ ! -f "${CONFIGURATION_FILE}" ]; then
 fi
 
 echo "${CONFIGURATION_FILE} has been created"
-
+# Replace this with a function that loads values from yaml file
 set -o allexport
 source "${CONFIGURATION_FILE}"
 set +o allexport
@@ -77,6 +79,15 @@ function wait_for_api {
 wait_for_api
 
 # Reconfigure DNS
+node_ip=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type == "InternalIP")].address}')
+
+echo "Updating dnsmasq with new domain"
+cat << EOF > /etc/dnsmasq.d/customer-domain.conf
+address=/apps.${CLUSTER_NAME}.${BASE_DOMAIN}/${node_ip}
+address=/api-int.${CLUSTER_NAME}.${BASE_DOMAIN}/${node_ip}
+address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${node_ip}
+EOF
+systemctl restart dnsmasq
 
 create_cert(){
   if [ ! -f "$1.done" ]

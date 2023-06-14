@@ -90,50 +90,49 @@ EOF
 systemctl restart dnsmasq
 
 create_cert(){
-  if [ ! -f "$1.done" ]
-  then
-    openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key-"$1.pem" -out "cert-$1.pem" \
-    -subj "/CN=$2" -addext "subjectAltName = DNS:$2"
+  local secret_name=${1}
+  local domain_name=${2}
+  local namespace=${3:-"openshift-config"}
 
-    oc create secret tls "$1-tls" --cert=cert-"$1.pem" --key=key-"$1.pem" -n openshift-config
-    touch "$1.done"
+  if [ ! -f $secret_name.done ]
+  then
+    echo "Creating new cert for $domain_name"
+    openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout /tmp/key-"${secret_name}".pem -out /tmp/cert-"${secret_name}".pem \
+    -subj "/CN=${domain_name}" -addext "subjectAltName = DNS:${domain_name}"
+    touch "${secret_name}".done
   fi
+  oc create secret tls "${secret_name}"-tls --cert=/tmp/cert-"${secret_name}".pem --key=/tmp/key-"${secret_name}".pem -n $namespace --dry-run=client -o yaml | oc apply -f -
 }
 
-create_cert "console" "console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
-create_cert "oauth" "oauth-openshift.apps.${CLUSTER_NAME}.${BASE_DOMAIN}"
-create_cert "api" "api.${CLUSTER_NAME}.${BASE_DOMAIN}"
+wait_for_cert() {
+    NEW_CERT=$(cat "${1}")
+    echo "Waiting for ${2} cert to get updated"
+    SERVER_CERT=$(echo | timeout 5 openssl s_client -showcerts -connect "${2}":"${3}" 2>/dev/null | openssl x509 || true)
+    until [[ "${NEW_CERT}" == "${SERVER_CERT}" ]]
+    do
+        sleep 10
+        SERVER_CERT=$(echo | timeout 5 openssl s_client -showcerts -connect "${2}":"${3}" 2>/dev/null | openssl x509 || true)
+    done
+    echo "${2} cert updated successfully"
+}
 
-echo "Update ingress"
-envsubst << "EOF" >> domain.patch
-spec:
-  appsDomain: apps.${CLUSTER_NAME}.${BASE_DOMAIN}
-  componentRoutes:
-  - hostname: console-openshift-console.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
-    name: console
-    namespace: openshift-console
-    servingCertKeyPairSecret:
-      name: console-tls
-  - hostname: oauth-openshift.apps.${CLUSTER_NAME}.${BASE_DOMAIN}
-    name: oauth-openshift
-    namespace: openshift-authentication
-    servingCertKeyPairSecret:
-      name: oauth-tls
-EOF
-
-oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge
-
-# TODO: check that curl to the new DNS works
-# TODO: change all routes already created with the default domain
+export SITE_DOMAIN="${CLUSTER_NAME}.${BASE_DOMAIN}"
+export API_DOMAIN="api.${SITE_DOMAIN}"
+export APPS_DOMAIN="apps.${SITE_DOMAIN}"
+export CONSOLE_DOMAIN="console-openshift-console.${APPS_DOMAIN}"
+export DOWNLOADS_DOMAIN="downloads-openshift-console.${APPS_DOMAIN}"
+export OAUTH_DOMAIN="oauth-openshift.${APPS_DOMAIN}"
 
 echo "Update API"
+create_cert "api" "${API_DOMAIN}"
+
 # Patch the apiserver
 envsubst << "EOF" >> api.patch
 spec:
   servingCerts:
     namedCertificates:
     - names:
-      - api.${CLUSTER_NAME}.${BASE_DOMAIN}
+      - ${API_DOMAIN}
       servingCertificate:
         name: api-tls
 EOF
@@ -141,7 +140,41 @@ EOF
 oc patch apiserver cluster --patch-file api.patch --type=merge
 
 # TODO: check that API got updated
-# TODO: Update pullSecret
+wait_for_cert /tmp/cert-api.pem "${API_DOMAIN}" 6443
+
+create_cert "apps" "*.${APPS_DOMAIN}"
+create_cert "apps" "*.${APPS_DOMAIN}" openshift-ingress
+
+echo "Update ingress"
+envsubst << "EOF" >> domain.patch
+spec:
+  appsDomain: ${APPS_DOMAIN}
+  componentRoutes:
+  - hostname: ${CONSOLE_DOMAIN}
+    name: console
+    namespace: openshift-console
+    servingCertKeyPairSecret:
+      name: apps-tls
+  - hostname: ${DOWNLOADS_DOMAIN}
+    name: downloads
+    namespace: openshift-console
+    servingCertKeyPairSecret:
+      name: apps-tls
+  - hostname: ${OAUTH_DOMAIN}
+    name: oauth-openshift
+    namespace: openshift-authentication
+    servingCertKeyPairSecret:
+      name: apps-tls
+EOF
+
+oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge
+wait_for_cert /tmp/cert-apps.pem "${CONSOLE_DOMAIN}" 443
+
+echo "Re-configuring existing Routes"
+# They will get delete existing routes, they will get recreated by the
+oc delete routes --field-selector metadata.namespace!=openshift-console,metadata.namespace!=openshift-authentication -A
+
+# TODO: Update ssh-key?
 
 # TODO: should we verify the pull secret is valid? how?
 if [ -z ${PULL_SECRET+x} ]; then

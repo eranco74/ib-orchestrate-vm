@@ -175,20 +175,41 @@ oc delete routes --field-selector metadata.namespace!=openshift-console,metadata
 
 # TODO: Update ssh-key?
 
+echo "Configure cluster registry"
+# see https://docs.openshift.com/container-platform/4.12/post_installation_configuration/connected-to-disconnected.html#connected-to-disconnected-config-registry_connected-to-disconnected
+# we need to do 4 things:
+# Create a ConfigMap with the certificate for the registry
+# Reference that ConfigMap in image.config.openshift.io/cluster (spec/additionalTrustedCA)
+# Update the cluster pull-secret
+# Create an ImageContentSourcePolicy
+# TODO validate we have all required fields
 # TODO: should we verify the pull secret is valid? how?
 if [ -z ${PULL_SECRET+x} ]; then
 	echo "PULL_SECRET not defined"
 else
-  echo "Overriding PULL_SECRET"
-  echo "$PULL_SECRET" > ps.json
+  echo 'Updating cluster-wide pull secret'
+  echo "${PULL_SECRET}" > ps.json
   oc set data secret/pull-secret -n openshift-config --from-file=.dockerconfigjson=ps.json
 fi
-# If we want to create additional pull secret
-# oc create secret -n openshift-config generic foo-secret --type=kubernetes.io/dockerconfigjson -from-file=.dockerconfigjson=ps.json
 
+if [ -z ${REGISTRY_CA+x} ]; then
+	echo "REGISTRY_CA not defined"
+else
+  echo 'Creating ConfigMap with registry certificate'
+  echo "${REGISTRY_CA}" > ps.json
+  oc create configmap edge-registry-config --from-file="edge-registry-ca.crt" -n openshift-config --dry-run=client -o yaml | oc apply -f -
 
-# TODO: Update ssh-key
-# TODO: update ICSP(s)
+  echo 'Adding certificate to image.config additionalTrustedCA'
+  oc patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":"edge-registry-config"}}}' --type=merge
+fi
+
+if [ -z ${ICSP+x} ]; then
+	echo "ICSP not defined"
+else
+  echo 'Creating ImageContentSourcePolicy'
+  echo "${ICSP}" > icsp.json
+  oc apply -f iscp.yaml
+fi
 
 rm -rf /opt/openshift
 systemctl enable kubelet

@@ -59,6 +59,9 @@ $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 start-iso: bootstrap-in-place-poc
 	make -C $(SNO_DIR) $@
 
+start-iso-abi: bootstrap-in-place-poc
+	make -C $(SNO_DIR) $@
+
 bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)
 	git clone https://github.com/eranco74/bootstrap-in-place-poc

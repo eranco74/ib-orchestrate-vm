@@ -91,10 +91,10 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 
 # Generate installation-configuration machine config that will create the service that reconfigure the node.
 bake/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml
-	podman run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@ || (rm $@ && false)
+	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@ || (rm $@ && false)
 
 bake/dnsmasq.yaml: bake/dnsmasq.yaml bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
-	podman run -i -v ./bake:/scripts/  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@ || (rm $@ && false)
+	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@ || (rm $@ && false)
 
 
 wait-for-shutdown:

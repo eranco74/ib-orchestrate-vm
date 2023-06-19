@@ -129,7 +129,7 @@ network: destroy-libvirt $(NET_CONFIG)
 	$(SNO_DIR)/virt-create-net.sh
 
 # Destroy previously created VMs/Networks and create a VM/Network with the pre-baked image
-start-vm: $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LIBVIRT)
+start-vm: checkenv $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LIBVIRT)
 	IMAGE=$(IMAGE_PATH_SNO_IN_LIBVIRT) \
 	VM_NAME=$(VM_NAME) \
 	NET_NAME=$(NET_NAME) \

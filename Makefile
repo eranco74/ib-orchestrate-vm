@@ -79,11 +79,12 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/node-ip.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/installation-configuration.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/dnsmasq.yaml
-	# TODO: add this once we have the bootstrap script
-	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
 	# wait for mcp to update
 	sleep 10
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=20m --for=condition=updated=true mcp master
+
+	# TODO: add this once we have the bootstrap script
+	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
 	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
 	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
 	sleep 60 && sudo virsh destroy sno-test

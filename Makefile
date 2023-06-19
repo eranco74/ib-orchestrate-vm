@@ -51,7 +51,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR)
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) $(CONFIG_DIR)/site-config.env
 
 .SILENT: destroy-libvirt
 
@@ -91,12 +91,15 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 	make wait-for-shutdown
 
 # Generate installation-configuration machine config that will create the service that reconfigure the node.
-bake/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml
+bake/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml bake/kubeadmin-kubeconfig
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@ || (rm $@ && false)
 
 bake/dnsmasq.yaml: bake/dnsmasq.yaml bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@ || (rm $@ && false)
 
+bake/kubeadmin-kubeconfig:
+	rm -rf $@
+	cp $(SNO_DIR)/sno-workdir/auth/kubeconfig $@
 
 wait-for-shutdown:
 	until sudo virsh domstate sno-test | grep shut; do \
@@ -143,7 +146,9 @@ $(CONFIG_DIR):
 	mkdir -p $@
 
 $(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
-	echo CLUSTER_NAME=${CLUSTER_NAME} > $@
+	echo PROTO_CLUSTER_NAME=test-cluster > $@
+	echo PROTO_CLUSTER_BASE_DOMAIN=redhat.com >> $@
+	echo CLUSTER_NAME=${CLUSTER_NAME} >> $@
 	echo BASE_DOMAIN=${BASE_DOMAIN} >> $@
 	echo -n PULL_SECRET= >> $@
 	echo -n "'" >> $@

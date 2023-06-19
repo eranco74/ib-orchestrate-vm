@@ -11,6 +11,11 @@ storage:
       overwrite: true
       contents:
         local: installation-configuration.sh
+    - path: /etc/kubernetes/baked-kubeadmin-kubeconfig
+      mode: 0644
+      overwrite: true
+      contents:
+        local: kubeadmin-kubeconfig
 systemd:
   units:
     - name: installation-configuration.service

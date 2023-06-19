@@ -5,4 +5,5 @@ bootstrap-in-place-poc
 /ssh-key/
 /site-config.iso
 /bake/installation-configuration.yaml
+/bake/kubeadmin-kubeconfig
 /config-dir/

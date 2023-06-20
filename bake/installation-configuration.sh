@@ -61,15 +61,21 @@ fi
 # TODO: update IP address, machine network
 
 # Recertify
-sleep 30 # Sleep to get around a weird DHCP/DNS issue
+sleep 30 # TODO: wait for weird network DHCP/DNS issue to resolve
 RELEASE_IMAGE=quay.io/openshift-release-dev/ocp-release:4.13.0-x86_64
 ETCD_IMAGE="$(oc adm release extract --from="$RELEASE_IMAGE" --file=image-references | jq '.spec.tags[] | select(.name == "etcd").from.name' -r)"
 RECERT_IMAGE="quay.io/otuchfel/recert:latest"
 sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store
 sleep 10 # TODO: wait for etcd
-sudo podman run --network=host --privileged -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --kubeconfig=/kubernetes/baked-kubeadmin-kubeconfig
-sleep 5 # TODO: Does etcd really need this sleep?
-sudo podman kill recert_etcd
+sudo podman run -it --network=host --privileged -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} \
+    --etcd-endpoint localhost:2379 \
+    --static-dir /kubernetes \
+    --static-dir /kubelet \
+    --static-dir /machine-config-daemon \
+    --kubeconfig=/kubernetes/baked-kubeadmin-kubeconfig \
+    --cn-san-replace "api-int.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN api-int.$CLUSTER_NAME.$BASE_DOMAIN" \
+    --cn-san-replace "api.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN api.$CLUSTER_NAME.$BASE_DOMAIN" \
+    --cn-san-replace "*.apps.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN *.apps.$CLUSTER_NAME.$BASE_DOMAIN"
 
 echo "Starting kubelet"
 systemctl start kubelet
@@ -99,33 +105,6 @@ address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${node_ip}
 EOF
 systemctl restart dnsmasq
 
-create_cert(){
-  local secret_name=${1}
-  local domain_name=${2}
-  local namespace=${3:-"openshift-config"}
-
-  if [ ! -f $secret_name.done ]
-  then
-    echo "Creating new cert for $domain_name"
-    openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout /tmp/key-"${secret_name}".pem -out /tmp/cert-"${secret_name}".pem \
-    -subj "/CN=${domain_name}" -addext "subjectAltName = DNS:${domain_name}"
-    touch "${secret_name}".done
-  fi
-  oc create secret tls "${secret_name}"-tls --cert=/tmp/cert-"${secret_name}".pem --key=/tmp/key-"${secret_name}".pem -n $namespace --dry-run=client -o yaml | oc apply -f -
-}
-
-wait_for_cert() {
-    NEW_CERT=$(cat "${1}")
-    echo "Waiting for ${2} cert to get updated"
-    SERVER_CERT=$(echo | timeout 5 openssl s_client -showcerts -connect "${2}":"${3}" 2>/dev/null | openssl x509 || true)
-    until [[ "${NEW_CERT}" == "${SERVER_CERT}" ]]
-    do
-        sleep 10
-        SERVER_CERT=$(echo | timeout 5 openssl s_client -showcerts -connect "${2}":"${3}" 2>/dev/null | openssl x509 || true)
-    done
-    echo "${2} cert updated successfully"
-}
-
 export SITE_DOMAIN="${CLUSTER_NAME}.${BASE_DOMAIN}"
 export API_DOMAIN="api.${SITE_DOMAIN}"
 export APPS_DOMAIN="apps.${SITE_DOMAIN}"
@@ -134,7 +113,6 @@ export DOWNLOADS_DOMAIN="downloads-openshift-console.${APPS_DOMAIN}"
 export OAUTH_DOMAIN="oauth-openshift.${APPS_DOMAIN}"
 
 echo "Update API"
-create_cert "api" "${API_DOMAIN}"
 
 # Patch the apiserver
 envsubst << "EOF" >> api.patch
@@ -150,10 +128,6 @@ EOF
 oc patch apiserver cluster --patch-file api.patch --type=merge
 
 # TODO: check that API got updated
-wait_for_cert /tmp/cert-api.pem "${API_DOMAIN}" 6443
-
-create_cert "apps" "*.${APPS_DOMAIN}"
-create_cert "apps" "*.${APPS_DOMAIN}" openshift-ingress
 
 echo "Update ingress"
 envsubst << "EOF" >> domain.patch
@@ -178,7 +152,6 @@ spec:
 EOF
 
 oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge
-wait_for_cert /tmp/cert-apps.pem "${CONSOLE_DOMAIN}" 443
 
 echo "Re-configuring existing Routes"
 # They will get delete existing routes, they will get recreated by the

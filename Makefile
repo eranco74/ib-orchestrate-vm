@@ -51,7 +51,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR)
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) $(CONFIG_DIR)/site-config.env
 
 .SILENT: destroy-libvirt
 
@@ -146,7 +146,9 @@ $(CONFIG_DIR):
 	mkdir -p $@
 
 $(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
-	echo CLUSTER_NAME=${CLUSTER_NAME} > $@
+	echo PROTO_CLUSTER_NAME=test-cluster > $@
+	echo PROTO_CLUSTER_BASE_DOMAIN=redhat.com >> $@
+	echo CLUSTER_NAME=${CLUSTER_NAME} >> $@
 	echo BASE_DOMAIN=${BASE_DOMAIN} >> $@
 	echo -n PULL_SECRET= >> $@
 	echo -n "'" >> $@

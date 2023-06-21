@@ -154,9 +154,9 @@ site-config.iso: $(CONFIG_DIR)/site-config.env
 	mkisofs -o site-config.iso -R -V "ZTC SNO" $<
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
-	sudo cp site-config.iso /var/lib/libvirt/images/
-	sudo chown qemu:qemu /var/lib/libvirt/images/site-config.iso
-	sudo restorecon /var/lib/libvirt/images/site-config.iso
+	sudo cp site-config.iso $(LIBVIRT_IMAGE_PATH)
+	sudo chown qemu:qemu $(LIBVIRT_IMAGE_PATH)/site-config.iso
+	sudo restorecon $(LIBVIRT_IMAGE_PATH)/site-config.iso
 
 update_script:
 	cat bake/installation-configuration.sh | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /usr/local/bin/installation-configuration.sh"

@@ -76,10 +76,10 @@ wait-for-install-complete:
 
 ### Bake the image template
 
-bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/node-ip.yaml
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/installation-configuration.yaml
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/dnsmasq.yaml
+bake: machineConfigs
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/internal-ip.yaml
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/installation-configuration.yaml
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/dnsmasq.yaml
 	# wait for mcp to update
 	sleep 10
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=20m --for=condition=updated=true mcp master
@@ -91,12 +91,17 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
 	sleep 60 && sudo virsh destroy sno-test
 	make wait-for-shutdown
 
+machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml machineConfigs/internal-ip.yaml
+
 # Generate installation-configuration machine config that will create the service that reconfigure the node.
-bake/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml
+machineConfigs/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@ || (rm $@ && false)
 
-bake/dnsmasq.yaml: bake/dnsmasq.yaml bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
+machineConfigs/dnsmasq.yaml: bake/dnsmasq.conf bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@ || (rm $@ && false)
+
+machineConfigs/internal-ip.yaml: bake/dispatcher-pre-up-internal-ip.sh bake/crio-nodenet.conf bake/kubelet-nodenet.conf
+	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-internal-ip.yaml > $@ || (rm $@ && false)
 
 
 wait-for-shutdown:

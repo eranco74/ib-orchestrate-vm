@@ -150,7 +150,7 @@ $(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
 	echo -n "$${PULL_SECRET}" >> $@
 	echo -n "'" >> $@
 
-site-config.iso: $(CONFIG_DIR)/site-config.env
+site-config: $(CONFIG_DIR)/site-config.env
 	mkisofs -o site-config.iso -R -V "ZTC SNO" $<
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso

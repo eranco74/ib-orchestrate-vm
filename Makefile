@@ -20,6 +20,7 @@ SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
 MACHINE_NETWORK ?= 192.168.128.0/24
 CLUSTER_NAME ?= test-cluster
 BASE_DOMAIN ?= redhat.com
+HOSTNAME ?= master1
 
 NET_CONFIG_TEMPLATE = $(IMAGE_BASED_DIR)/template-net.xml
 NET_CONFIG = $(IMAGE_BASED_DIR)/net.xml
@@ -119,6 +120,7 @@ $(NET_CONFIG): $(NET_CONFIG_TEMPLATE)
 		-e 's/REPLACE_HOST_IP/$(HOST_IP)/' \
 		-e 's|CLUSTER_NAME|$(CLUSTER_NAME)|' \
 		-e 's|BASE_DOMAIN|$(BASE_DOMAIN)|' \
+		-e 's|HOSTNAME|$(HOSTNAME)|' \
 	    $(NET_CONFIG_TEMPLATE) > $@
 
 network: destroy-libvirt $(NET_CONFIG)
@@ -126,6 +128,7 @@ network: destroy-libvirt $(NET_CONFIG)
 	HOST_IP=$(HOST_IP) \
 	CLUSTER_NAME=$(CLUSTER_NAME) \
 	BASE_DOMAIN=$(BASE_DOMAIN) \
+	HOSTNAME=$(HOSTNAME) \
 	$(SNO_DIR)/virt-create-net.sh
 
 # Destroy previously created VMs/Networks and create a VM/Network with the pre-baked image

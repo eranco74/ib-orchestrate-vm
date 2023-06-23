@@ -57,7 +57,6 @@ if [ -z ${BASE_DOMAIN+x} ]; then
 	exit 1
 fi
 
-# TODO: Update hostname
 # TODO: update IP address, machine network
 # TODO: Regenerate/update certificates
 
@@ -77,6 +76,31 @@ function wait_for_api {
 }
 
 wait_for_api
+
+wait_approve_csr() {
+  local name=${1}
+
+  echo "Waiting for ${name} CSR..."
+  until oc get csr | grep -i "${name}" | grep -i "pending" &> /dev/null
+  do
+    echo "Waiting for ${name} CSR..."
+    sleep 5
+  done
+  echo "CSR ${name} is ready for approval"
+
+  echo "Approving all pending CSRs..."
+  oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | xargs oc adm certificate approve
+}
+
+# if hostname has changed
+if [[ "$(oc get nodes -ojsonpath='{.items[0].metadata.name}')" != "$(hostname)" ]]
+then
+  wait_approve_csr "kube-apiserver-client-kubelet"
+  wait_approve_csr "kubelet-serving"
+
+  echo "Deleting previous node..."
+  oc delete node "$(oc get nodes -ojsonpath='{.items[?(@.metadata.name != "'"$(hostname)"'"].metadata.name}')"
+fi
 
 # Reconfigure DNS
 node_ip=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type == "InternalIP")].address}')

@@ -32,7 +32,7 @@ mount the iso, read the configuration and start the reconfiguration process.
 - To copy the previous VM's image into `/var/lib/libvirt/images/SNO-baked-image.qcow2` and then create a new SNO instance from it, with the `site-config.iso` attached, run:
 
 ```bash
-make start-vm
+make start-vm HOSTNAME=foobar
 ```
 
 - You can now monitor the progress using `make ssh` and `journalctl -f -u installation-configuration.service`

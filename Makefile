@@ -93,6 +93,7 @@ bake: machineConfigs
 	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
 	sleep 60 && sudo virsh destroy sno-test
 	make wait-for-shutdown
+	sudo virsh undefine sno-test
 
 machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 
@@ -117,7 +118,7 @@ wait-for-shutdown:
 create-image-template: $(IMAGE_PATH_SNO_IN_LIBVIRT)
 
 $(IMAGE_PATH_SNO_IN_LIBVIRT): $(BASE_IMAGE_PATH_SNO)
-	sudo cp $< $@
+	sudo mv $< $@
 	sudo chown qemu:qemu $@
 
 ### Create a new SNO from the image template

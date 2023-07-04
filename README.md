@@ -5,6 +5,14 @@ single node OpenShift **relocation**.
 
 Note that single node OpenShift relocation is currently unsupported.
 
+## Prerequisites
+
+- NMState v2.2.10 or above, this is required due to the nmstate config used in the agent-config.yaml
+```bash
+sudo dnf copr enable nmstate/nmstate-git
+sudo dnf install nmstate
+```
+
 ### Generate the image template
 Install SNO cluster with bootstrap-in-place:
 

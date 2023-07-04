@@ -60,7 +60,11 @@ $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 start-iso: bootstrap-in-place-poc
 	make -C $(SNO_DIR) $@
 
-start-iso-abi: bootstrap-in-place-poc
+start-iso-abi: bootstrap-in-place-poc machineConfigs/internal-ip.yaml
+	@echo "Add the internal-ip machine config - this is required until https://github.com/openshift/machine-config-operator/pull/3774 is merged"
+	cp machineConfigs/internal-ip.yaml $(SNO_DIR)/manifests/
+	@echo "Replace the bootstrap-in-place agent-config.yaml with the config from this repo"
+	cp agent-config.yaml $(SNO_DIR)
 	make -C $(SNO_DIR) $@
 
 bootstrap-in-place-poc:
@@ -77,7 +81,6 @@ wait-for-install-complete:
 ### Bake the image template
 
 bake: machineConfigs
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/internal-ip.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/installation-configuration.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/dnsmasq.yaml
 	# wait for mcp to update
@@ -91,7 +94,7 @@ bake: machineConfigs
 	sleep 60 && sudo virsh destroy sno-test
 	make wait-for-shutdown
 
-machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml machineConfigs/internal-ip.yaml
+machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 
 # Generate installation-configuration machine config that will create the service that reconfigure the node.
 machineConfigs/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml

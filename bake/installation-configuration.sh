@@ -32,7 +32,7 @@ done
 DEVICE=$(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name')
 if [[ -n ${DEVICE+x} ]]; then
   mount_config "${DEVICE}"
-  cp /mnt/config/site-config.env ${CONFIGURATION_FILE}
+  cp -r /mnt/config/* $(dirname ${CONFIGURATION_FILE})
 fi
 
 if [ ! -f "${CONFIGURATION_FILE}" ]; then
@@ -58,6 +58,16 @@ if [ -z ${BASE_DOMAIN+x} ]; then
 fi
 
 # TODO: update IP address, machine network
+
+if ls /opt/openshift/*.nmconnection 1> /dev/null 2>&1; then
+    echo "Static network configuration exist"
+    cp /opt/openshift/*.nmconnection /etc/NetworkManager/system-connections/ -f
+    systemctl restart NetworkManager
+    # TODO: we might need to delete the connection first
+else
+    echo "Static network configuration do not exist"
+fi
+
 # TODO: Regenerate/update certificates
 
 echo "Starting kubelet"

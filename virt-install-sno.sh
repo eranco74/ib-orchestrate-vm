@@ -33,7 +33,7 @@ nohup virt-install \
     --vcpus "${CPU_CORE}" \
     --os-variant="${OS_VARIANT}" \
     --import \
-    --network=network:${NET_NAME},mac=52:54:00:ee:42:e2 \
+    --network=network:${NET_NAME},mac=52:54:00:ee:42:e1 \
     --graphics=none \
     --disk "size=${DISK_GB},backing_store=${IMAGE}" \
     --cdrom "${SITE_CONFIG}" \

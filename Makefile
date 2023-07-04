@@ -131,6 +131,9 @@ $(NET_CONFIG): $(NET_CONFIG_TEMPLATE)
 		-e 's|BASE_DOMAIN|$(BASE_DOMAIN)|' \
 		-e 's|HOSTNAME|$(HOSTNAME)|' \
 	    $(NET_CONFIG_TEMPLATE) > $@
+	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
+		sed -i "/dhcp/,/\/dhcp/d" $@; \
+	fi
 
 network: destroy-libvirt $(NET_CONFIG)
 	NET_XML=$(NET_CONFIG) \
@@ -148,6 +151,11 @@ start-vm: checkenv $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LI
 	SITE_CONFIG=$(SITE_CONFIG_PATH_IN_LIBVIRT) \
 	$(IMAGE_BASED_DIR)/virt-install-sno.sh
 
+
+# Set the network name to static and call start-vm
+start-vm-static-network: STATIC_NETWORK = "TRUE"
+start-vm-static-network: start-vm
+
 ssh: $(SSH_KEY_PRIV_PATH)
 	ssh $(SSH_FLAGS) $(SSH_HOST)
 
@@ -162,7 +170,11 @@ $(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
 	echo -n "$${PULL_SECRET}" >> $@
 	echo -n "'" >> $@
 
-site-config.iso: $(CONFIG_DIR)/site-config.env
+site-config.iso: $(CONFIG_DIR)
+	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
+		echo "Adding static network configuration to ISO" \
+		cp static_network.cfg $(CONFIG_DIR)/enp1s0.nmconnection; \
+	fi
 	mkisofs -o site-config.iso -R -V "ZTC SNO" $<
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso

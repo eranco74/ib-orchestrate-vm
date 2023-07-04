@@ -13,19 +13,19 @@ spec:
       files:
         - contents:
             compression: gzip
-            source: data:;base64,H4sIAAAAAAAC/2SOwUoDMRCG73mK39SbmJilFBV8AE8Kileb7IxmoJssSba0iO8uRgWh12/m//hWZ3apxQZJNvgalVrhOUqFJ0KLDEmNS/I73D+i5Y748Iu2oVzyYYtQhN4ZS2VCOOLh5elW/e1eZb7T7mYwbnNt3LAx7soOa63SNO4EY06JxyY5Ycokb0d0JS5k3q+NJypcK1fo849/wk+Nfp+4xUzwS8tK5u/k0rtPvon3P+KvAAAA//8efcc67gAAAA==
+            source: data:;base64,H4sIAAAAAAAC/2SOzUoDMRRG93mKz9SdmJih+Ac+gCsFxa1N5l7NhU4yJJnSIr67GBWEbs+93+GsTuxSiw2SbPA1KrXCc5QKT4QWGZIal+S3uH9Eyx3x/hdtQjnn/QahCL0zlsqEcMDDy9Ot+tu9ynyn3c1g3OW1ccOVcRd2WGuVpnErGHNKPDbJCVMmeTugK3Em825tPFHhWrlCn378E35q9PvELWaCX1pWMn8nl9599E28+xF/BQAA//9zqy/G7gAAAA==
           mode: 365
           overwrite: true
           path: /etc/NetworkManager/dispatcher.d/pre-up.d/internal-ip
         - contents:
             compression: ""
-            source: data:,%5BService%5D%0AEnvironment%3D%22KUBELET_NODE_IP%3D192.168.126.10%22%20%22KUBELET_NODE_IPS%3D192.168.126.10%22
+            source: data:,%5BService%5D%0AEnvironment%3D%22KUBELET_NODE_IP%3D192.168.127.10%22%20%22KUBELET_NODE_IPS%3D192.168.127.10%22
           mode: 420
           overwrite: true
           path: /etc/systemd/system/kubelet.service.d/30-nodenet.conf
         - contents:
             compression: ""
-            source: data:,%5BService%5D%0AEnvironment%3D%22CONTAINER_STREAM_ADDRESS%3D192.168.126.10%22
+            source: data:,%5BService%5D%0AEnvironment%3D%22CONTAINER_STREAM_ADDRESS%3D192.168.127.10%22
           mode: 420
           overwrite: true
           path: /etc/systemd/system/crio.service.d/30-nodenet.conf

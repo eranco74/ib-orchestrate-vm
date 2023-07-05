@@ -22,7 +22,7 @@ fi
 
 OS_VARIANT="rhel8.1"
 RAM_MB="${RAM_MB:-16384}"
-DISK_GB="${DISK_GB:-35}"
+DISK_GB="${DISK_GB:-135}"
 CPU_CORE="${CPU_CORE:-6}"
 
 rm nohup.out
@@ -36,6 +36,7 @@ nohup virt-install \
     --network=network:${NET_NAME},mac=52:54:00:ee:42:e1 \
     --graphics=none \
     --disk "size=${DISK_GB},backing_store=${IMAGE}" \
+    --check disk_size=off \
     --cdrom "${SITE_CONFIG}" \
     --events on_reboot=restart \
     --boot hd,cdrom \

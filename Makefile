@@ -75,7 +75,7 @@ wait-for-install-complete:
 
 ### Bake the image template
 
-bake: bake/installation-configuration.yaml bake/dnsmasq.yaml
+bake: bake/installation-configuration.yaml bake/dnsmasq.yaml bake/kubeadmin-kubeconfig
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/node-ip.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/installation-configuration.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./bake/dnsmasq.yaml

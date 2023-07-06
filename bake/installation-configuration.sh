@@ -75,7 +75,9 @@ sudo podman run -it --network=host --privileged -v /etc/kubernetes:/kubernetes -
     --kubeconfig=/kubernetes/baked-kubeadmin-kubeconfig \
     --cn-san-replace "api-int.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN api-int.$CLUSTER_NAME.$BASE_DOMAIN" \
     --cn-san-replace "api.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN api.$CLUSTER_NAME.$BASE_DOMAIN" \
-    --cn-san-replace "*.apps.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN *.apps.$CLUSTER_NAME.$BASE_DOMAIN"
+    --cn-san-replace "*.apps.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN *.apps.$CLUSTER_NAME.$BASE_DOMAIN" \
+    --cn-san-replace "*.apps.$PROTO_CLUSTER_NAME.$PROTO_CLUSTER_BASE_DOMAIN *.apps.$CLUSTER_NAME.$BASE_DOMAIN" \
+	--cluster-rename new-name,foo.com
 
 echo "Starting kubelet"
 systemctl start kubelet

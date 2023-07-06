@@ -9,7 +9,7 @@ cd /opt/openshift
 function mount_config {
   echo "Mounting config iso"
   mkdir -p /mnt/config
-  if ! mountpoint --quiet /var/mnt/config; then
+  if ! mountpoint --quiet /mnt/config; then
       mount "/dev/$1" /mnt/config
   fi
   ls /mnt/config

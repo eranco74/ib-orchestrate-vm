@@ -17,7 +17,7 @@ BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/sno-test.qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
 
-MACHINE_NETWORK ?= 192.168.128.0/24
+MACHINE_NETWORK ?= 192.168.127.0/24
 CLUSTER_NAME ?= test-cluster
 BASE_DOMAIN ?= redhat.com
 HOSTNAME ?= master1
@@ -65,7 +65,7 @@ start-iso-abi: bootstrap-in-place-poc machineConfigs/internal-ip.yaml
 	cp machineConfigs/internal-ip.yaml $(SNO_DIR)/manifests/
 	@echo "Replace the bootstrap-in-place agent-config.yaml with the config from this repo"
 	cp agent-config.yaml $(SNO_DIR)
-	make -C $(SNO_DIR) $@
+	MACHINE_NETWORK=${MACHINE_NETWORK} make -C $(SNO_DIR) $@
 
 bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)

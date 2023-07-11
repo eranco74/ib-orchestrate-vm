@@ -83,8 +83,8 @@ wait-for-install-complete:
 bake: machineConfigs
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/installation-configuration.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/dnsmasq.yaml
-	# wait for mcp to update
-	sleep 10
+	echo "Wait for mcp to update, the node will reboot in the process"
+	sleep 120
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=20m --for=condition=updated=true mcp master
 
 	# TODO: add this once we have the bootstrap script
@@ -160,6 +160,7 @@ ssh: $(SSH_KEY_PRIV_PATH)
 	ssh $(SSH_FLAGS) $(SSH_HOST)
 
 $(CONFIG_DIR):
+	rm -rf $@
 	mkdir -p $@
 
 $(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
@@ -170,12 +171,12 @@ $(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
 	echo -n "$${PULL_SECRET}" >> $@
 	echo -n "'" >> $@
 
-site-config.iso: $(CONFIG_DIR)
+site-config.iso: $(CONFIG_DIR)/site-config.env
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
-		echo "Adding static network configuration to ISO" \
+		echo "Adding static network configuration to ISO"; \
 		cp static_network.cfg $(CONFIG_DIR)/enp1s0.nmconnection; \
 	fi
-	mkisofs -o site-config.iso -R -V "ZTC SNO" $<
+	mkisofs -o site-config.iso -R -V "ZTC SNO" $(CONFIG_DIR)
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 	sudo cp site-config.iso $(LIBVIRT_IMAGE_PATH)

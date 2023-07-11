@@ -97,6 +97,55 @@ then
   oc delete node "$(oc get nodes -ojsonpath='{.items[?(@.metadata.name != "'"$(hostname)"'"].metadata.name}')"
 fi
 
+verify_csr_subject() {
+  local csr=${1}
+  local subject
+
+  subject="$(oc get csr -ojsonpath='{.spec.request}' "${csr}" |base64 -d | openssl req -noout -subject -nameopt multiline)"
+
+  if [ "$(echo "${subject}" |grep commonName |awk '{print $3}')" != "system:node:$(hostname)" ]
+  then
+    echo "CommonName is not 'system:node:master1'"
+    return
+  fi
+
+  if [ "$(echo "${subject}" |grep organizationName |awk '{print $3}')" != "system:nodes" ]
+  then
+    echo "Organization is not 'system:nodes'"
+    return
+  fi
+}
+
+# If the kubelet API server client certificate has expired:
+#   1. wait for the respective CSR to be created
+#   2. verify it
+#   3. approve it
+#   4. wait for the certificate to be issued
+KUBELET_CLIENT_CERTIFICATE=/var/lib/kubelet/pki/kubelet-client-current.pem
+until openssl x509 -in ${KUBELET_CLIENT_CERTIFICATE} -checkend 30 &> /dev/null
+do
+  echo "${KUBELET_CLIENT_CERTIFICATE} has expired, waiting for new one to be issued..."
+
+  csr=$(oc get csr -o go-template='{{range .items}}{{if and (not .status) (eq .spec.signerName "kubernetes.io/kube-apiserver-client-kubelet") (eq .spec.username "system:serviceaccount:openshift-machine-config-operator:node-bootstrapper")}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | head -1 || true)
+  if [ -z "${csr}" ]
+  then
+    sleep 5
+    continue
+  fi
+
+  echo "${csr} is pending. Verifying CSR before approving it..."
+  err=$(verify_csr_subject "${csr}")
+  if [ -n "${err}" ]
+  then
+    echo "${csr} could not be verified: ${err}"
+    break
+  fi
+
+  echo "${csr} successfully verified. Approving it..."
+  oc adm certificate approve "${csr}"
+done
+echo "${KUBELET_CLIENT_CERTIFICATE} is valid."
+
 # Reconfigure DNS
 node_ip=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type == "InternalIP")].address}')
 domain=$(oc apply -f "${RELOCATION_CONFIG_PATH}" --dry-run=client -o jsonpath={'.items[?(@.kind=="ClusterRelocation")].spec.domain'})
@@ -118,6 +167,60 @@ oc apply -f "${RELOCATION_CONFIG_PATH}"
 echo "Waiting for cluster relocation status"
 oc wait --timeout=1h clusterrelocation cluster --for condition=Reconciled=true
 echo "Cluster configuration updated"
+
+
+verify_csr_addresses() {
+  local csr=${1}
+  local addresses=${2}
+  local csr_san_content
+
+  csr_san_content=$(oc get csr -ojsonpath='{.spec.request}' "${csr}" |base64 -d | openssl req -noout -text |grep DNS)
+  for address in "${addresses[@]}"
+  do
+    if [[ "${csr_san_content}" != *"${address}"* ]]
+    then
+      echo "${address} not in CSR DNS or IP addresses"
+      return
+    fi
+  done
+}
+# If the kubelet serving certificate has expired:
+#   1. wait for the respective CSR to be created
+#   2. verify it
+#   3. approve it
+#   4. wait for the certificate to be issued
+KUBELET_SERVING_CERTIFICATE=/var/lib/kubelet/pki/kubelet-server-current.pem
+until openssl x509 -in ${KUBELET_SERVING_CERTIFICATE} -checkend 30 &> /dev/null
+do
+  echo "${KUBELET_SERVING_CERTIFICATE} has expired, waiting for new one to be issued..."
+
+  csr=$(oc get csr -o go-template='{{range .items}}{{if and (not .status) (eq .spec.signerName "kubernetes.io/kubelet-serving") (eq .spec.username "system:node:'"$(hostname)"'")}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | head -1 || true)
+  if [ -z "${csr}" ]
+  then
+    sleep 5
+    continue
+  fi
+
+  echo "${csr} is pending. Verifying CSR before approving it..."
+  err=$(verify_csr_subject "${csr}")
+  if [ -n "${err}" ]
+  then
+    echo "${csr} could not be verified: ${err}"
+    break
+  fi
+
+  IFS=$' ' read -r -d '' -a addresses < <( oc get nodes "$(hostname)" -ojsonpath='{.status.addresses[*].address}'  && printf '\0' )
+  err=$(verify_csr_addresses "${csr}" "${addresses}")
+  if [ -n "${err}" ]
+  then
+    echo "${csr} addresses could not be verified: ${err}"
+    break
+  fi
+
+  echo "${csr} successfully verified. Approving it..."
+  oc adm certificate approve "${csr}"
+done
+echo "${KUBELET_SERVING_CERTIFICATE} is valid."
 
 rm -rf /opt/openshift
 systemctl enable kubelet

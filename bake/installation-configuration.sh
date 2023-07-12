@@ -9,7 +9,7 @@ cd /opt/openshift
 function mount_config {
   echo "Mounting config iso"
   mkdir -p /mnt/config
-  if ! mountpoint --quiet /mnt/config; then
+  if [[ ! $(mountpoint --quiet /mnt/config) ]]; then
       mount "/dev/$1" /mnt/config
   fi
   ls /mnt/config
@@ -21,43 +21,28 @@ function umount_config {
   rm -rf /mnt/config
 }
 
-CONFIGURATION_FILE=/opt/openshift/site-config.env
-echo "Waiting for ${CONFIGURATION_FILE}"
-while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name') && ! -f /opt/openshift/site-config.env ]];
+RELOCATION_CONFIG_PATH=/opt/openshift/cluster-relocation.yaml
+echo "Waiting for ${RELOCATION_CONFIG_PATH}"
+while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name') && ! -f "${RELOCATION_CONFIG_PATH}" ]];
 do
   echo "Waiting for site-config"
   sleep 5
 done
 
 DEVICE=$(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name')
-if [[ -n ${DEVICE+x} ]]; then
+if [[ -n ${DEVICE+x} && ! -f "${RELOCATION_CONFIG_PATH}" ]]; then
   mount_config "${DEVICE}"
-  cp -r /mnt/config/* $(dirname ${CONFIGURATION_FILE})
+  cp -r /mnt/config/* $(dirname ${RELOCATION_CONFIG_PATH})
 fi
 
-if [ ! -f "${CONFIGURATION_FILE}" ]; then
-  echo "Failed to find configuration file at ${CONFIGURATION_FILE}"
+if [ ! -f "${RELOCATION_CONFIG_PATH}" ]; then
+  echo "Failed to find configuration file at ${RELOCATION_CONFIG_PATH}"
   exit 1
 fi
 
-echo "${CONFIGURATION_FILE} has been created"
+echo "${RELOCATION_CONFIG_PATH} has been created"
 # Replace this with a function that loads values from yaml file
-set -o allexport
-source "${CONFIGURATION_FILE}"
 set +o allexport
-
-
-if [ -z ${CLUSTER_NAME+x} ]; then
-	echo "Please set CLUSTER_NAME"
-	exit 1
-fi
-
-if [ -z ${BASE_DOMAIN+x} ]; then
-	echo "Please set BASE_DOMAIN"
-	exit 1
-fi
-
-# TODO: update IP address, machine network
 
 if ls /opt/openshift/*.nmconnection 1> /dev/null 2>&1; then
     echo "Static network configuration exist"
@@ -68,12 +53,12 @@ else
     echo "Static network configuration do not exist"
 fi
 
-# TODO: Regenerate/update certificates
 
+# TODO check if we really need to stop kubelet
 echo "Starting kubelet"
 systemctl start kubelet
 
-#TODO: we need to add kubeconfig to the node for the configuration stage
+#TODO: we need to add kubeconfig to the node for the configuration stage, this kubeconfig might not suffice
 export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/localhost.kubeconfig
 function wait_for_api {
   echo "Waiting for api ..."
@@ -114,137 +99,25 @@ fi
 
 # Reconfigure DNS
 node_ip=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type == "InternalIP")].address}')
+domain=$(oc apply -f "${RELOCATION_CONFIG_PATH}" --dry-run=client -o jsonpath={'.items[?(@.kind=="ClusterRelocation")].spec.domain'})
 
-echo "Updating dnsmasq with new domain"
-cat << EOF > /etc/dnsmasq.d/customer-domain.conf
-address=/apps.${CLUSTER_NAME}.${BASE_DOMAIN}/${node_ip}
-address=/api-int.${CLUSTER_NAME}.${BASE_DOMAIN}/${node_ip}
-address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${node_ip}
-EOF
-systemctl restart dnsmasq
-
-create_cert(){
-  local secret_name=${1}
-  local domain_name=${2}
-  local namespace=${3:-"openshift-config"}
-
-  if [ ! -f $secret_name.done ]
-  then
-    echo "Creating new cert for $domain_name"
-    openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout /tmp/key-"${secret_name}".pem -out /tmp/cert-"${secret_name}".pem \
-    -subj "/CN=${domain_name}" -addext "subjectAltName = DNS:${domain_name}"
-    touch "${secret_name}".done
-  fi
-  oc create secret tls "${secret_name}"-tls --cert=/tmp/cert-"${secret_name}".pem --key=/tmp/key-"${secret_name}".pem -n $namespace --dry-run=client -o yaml | oc apply -f -
-}
-
-wait_for_cert() {
-    NEW_CERT=$(cat "${1}")
-    echo "Waiting for ${2} cert to get updated"
-    SERVER_CERT=$(echo | timeout 5 openssl s_client -showcerts -connect "${2}":"${3}" 2>/dev/null | openssl x509 || true)
-    until [[ "${NEW_CERT}" == "${SERVER_CERT}" ]]
-    do
-        sleep 10
-        SERVER_CERT=$(echo | timeout 5 openssl s_client -showcerts -connect "${2}":"${3}" 2>/dev/null | openssl x509 || true)
-    done
-    echo "${2} cert updated successfully"
-}
-
-export SITE_DOMAIN="${CLUSTER_NAME}.${BASE_DOMAIN}"
-export API_DOMAIN="api.${SITE_DOMAIN}"
-export APPS_DOMAIN="apps.${SITE_DOMAIN}"
-export CONSOLE_DOMAIN="console-openshift-console.${APPS_DOMAIN}"
-export DOWNLOADS_DOMAIN="downloads-openshift-console.${APPS_DOMAIN}"
-export OAUTH_DOMAIN="oauth-openshift.${APPS_DOMAIN}"
-
-echo "Update API"
-create_cert "api" "${API_DOMAIN}"
-
-# Patch the apiserver
-envsubst << "EOF" >> api.patch
-spec:
-  servingCerts:
-    namedCertificates:
-    - names:
-      - ${API_DOMAIN}
-      servingCertificate:
-        name: api-tls
-EOF
-
-oc patch apiserver cluster --patch-file api.patch --type=merge
-
-# TODO: check that API got updated
-wait_for_cert /tmp/cert-api.pem "${API_DOMAIN}" 6443
-
-create_cert "apps" "*.${APPS_DOMAIN}"
-create_cert "apps" "*.${APPS_DOMAIN}" openshift-ingress
-
-echo "Update ingress"
-envsubst << "EOF" >> domain.patch
-spec:
-  appsDomain: ${APPS_DOMAIN}
-  componentRoutes:
-  - hostname: ${CONSOLE_DOMAIN}
-    name: console
-    namespace: openshift-console
-    servingCertKeyPairSecret:
-      name: apps-tls
-  - hostname: ${DOWNLOADS_DOMAIN}
-    name: downloads
-    namespace: openshift-console
-    servingCertKeyPairSecret:
-      name: apps-tls
-  - hostname: ${OAUTH_DOMAIN}
-    name: oauth-openshift
-    namespace: openshift-authentication
-    servingCertKeyPairSecret:
-      name: apps-tls
-EOF
-
-oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge
-wait_for_cert /tmp/cert-apps.pem "${CONSOLE_DOMAIN}" 443
-
-echo "Re-configuring existing Routes"
-# They will get delete existing routes, they will get recreated by the
-oc delete routes --field-selector metadata.namespace!=openshift-console,metadata.namespace!=openshift-authentication -A
-
-# TODO: Update ssh-key?
-
-echo "Configure cluster registry"
-# see https://docs.openshift.com/container-platform/4.12/post_installation_configuration/connected-to-disconnected.html#connected-to-disconnected-config-registry_connected-to-disconnected
-# we need to do 4 things:
-# Create a ConfigMap with the certificate for the registry
-# Reference that ConfigMap in image.config.openshift.io/cluster (spec/additionalTrustedCA)
-# Update the cluster pull-secret
-# Create an ImageContentSourcePolicy
-# TODO validate we have all required fields
-# TODO: should we verify the pull secret is valid? how?
-if [ -z ${PULL_SECRET+x} ]; then
-	echo "PULL_SECRET not defined"
+if [ -z ${domain+x} ]; then
+  echo "domain not defined"
 else
-  echo 'Updating cluster-wide pull secret'
-  echo "${PULL_SECRET}" > ps.json
-  oc set data secret/pull-secret -n openshift-config --from-file=.dockerconfigjson=ps.json
+  echo "Updating dnsmasq with new domain"
+  cat << EOF > /etc/dnsmasq.d/customer-domain.conf
+address=/apps.${domain}/${node_ip}
+address=/api-int.${domain}/${node_ip}
+address=/api.${domain}/${node_ip}
+EOF
+  systemctl restart dnsmasq
 fi
 
-if [ -z ${REGISTRY_CA+x} ]; then
-	echo "REGISTRY_CA not defined"
-else
-  echo 'Creating ConfigMap with registry certificate'
-  echo "${REGISTRY_CA}" > ps.json
-  oc create configmap edge-registry-config --from-file="edge-registry-ca.crt" -n openshift-config --dry-run=client -o yaml | oc apply -f -
-
-  echo 'Adding certificate to image.config additionalTrustedCA'
-  oc patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":"edge-registry-config"}}}' --type=merge
-fi
-
-if [ -z ${ICSP+x} ]; then
-	echo "ICSP not defined"
-else
-  echo 'Creating ImageContentSourcePolicy'
-  echo "${ICSP}" > icsp.json
-  oc apply -f iscp.yaml
-fi
+echo "Applying cluster relocation CR"
+oc apply -f "${RELOCATION_CONFIG_PATH}"
+echo "Waiting for cluster relocation status"
+oc wait --timeout=1h clusterrelocation cluster --for condition=Reconciled=true
+echo "Cluster configuration updated"
 
 rm -rf /opt/openshift
 systemctl enable kubelet

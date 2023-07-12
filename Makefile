@@ -16,14 +16,12 @@ LIBVIRT_IMAGE_PATH = /var/lib/libvirt/images
 BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/sno-test.qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
-
+CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/cluster-relocation.template
 MACHINE_NETWORK ?= 192.168.127.0/24
-CLUSTER_NAME ?= test-cluster
-BASE_DOMAIN ?= redhat.com
-HOSTNAME ?= master1
 
 NET_CONFIG_TEMPLATE = $(IMAGE_BASED_DIR)/template-net.xml
 NET_CONFIG = $(IMAGE_BASED_DIR)/net.xml
+
 
 NET_NAME = test-net-2
 VM_NAME = sno-test-2
@@ -39,6 +37,17 @@ SSH_FLAGS = -o IdentityFile=$(SSH_KEY_PRIV_PATH) \
 
 HOST_IP = 192.168.128.10
 SSH_HOST = core@$(HOST_IP)
+
+# Relocation config
+CLUSTER_NAME ?= new-name
+BASE_DOMAIN ?= relocated.com
+HOSTNAME ?= master1
+MIRROR_URL ?= mirror-registry.local
+MIRROR_PORT ?= 5000
+NEW_REGISTRY_CERT = $(shell cat edge_configs/registry.crt)
+NEW_SSH_KEY = $(shell cat ${SSH_KEY_PUB_PATH})
+export NEW_REGISTRY_CERT
+export NEW_SSH_KEY
 
 $(SSH_KEY_DIR):
 	@echo Creating SSH key dir
@@ -128,9 +137,8 @@ $(IMAGE_PATH_SNO_IN_LIBVIRT): $(BASE_IMAGE_PATH_SNO)
 $(NET_CONFIG): $(NET_CONFIG_TEMPLATE)
 	sed -e 's/REPLACE_NET_NAME/$(NET_NAME)/' \
 		-e 's/REPLACE_HOST_IP/$(HOST_IP)/' \
-		-e 's|CLUSTER_NAME|$(CLUSTER_NAME)|' \
-		-e 's|BASE_DOMAIN|$(BASE_DOMAIN)|' \
-		-e 's|HOSTNAME|$(HOSTNAME)|' \
+		-e 's|DOMAIN|$(CLUSTER_NAME).$(BASE_DOMAIN)|' \
+		-e 's|REPLACE_HOSTNAME|$(HOSTNAME)|' \
 	    $(NET_CONFIG_TEMPLATE) > $@
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		sed -i "/dhcp/,/\/dhcp/d" $@; \
@@ -141,7 +149,6 @@ network: destroy-libvirt $(NET_CONFIG)
 	HOST_IP=$(HOST_IP) \
 	CLUSTER_NAME=$(CLUSTER_NAME) \
 	BASE_DOMAIN=$(BASE_DOMAIN) \
-	HOSTNAME=$(HOSTNAME) \
 	$(SNO_DIR)/virt-create-net.sh
 
 # Destroy previously created VMs/Networks and create a VM/Network with the pre-baked image
@@ -164,18 +171,22 @@ $(CONFIG_DIR):
 	rm -rf $@
 	mkdir -p $@
 
-$(CONFIG_DIR)/site-config.env: $(CONFIG_DIR) checkenv
-	echo CLUSTER_NAME=${CLUSTER_NAME} > $@
-	echo BASE_DOMAIN=${BASE_DOMAIN} >> $@
-	echo -n PULL_SECRET= >> $@
-	echo -n "'" >> $@
-	echo -n "$${PULL_SECRET}" >> $@
-	echo -n "'" >> $@
+# Set the network name to static and call start-vm
+$(CONFIG_DIR)/cluster-relocation.yaml: PULL_SECRET_ENCODED=$(shell echo '$(PULL_SECRET)' | json_reformat | base64 -w 0)
+$(CONFIG_DIR)/cluster-relocation.yaml: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE) checkenv
+	sed -e 's/REPLACE_DOMAIN/$(CLUSTER_NAME).$(BASE_DOMAIN)/' \
+		-e 's/REPLACE_PULL_SECRET_ENCODED/"$(PULL_SECRET_ENCODED)"/' \
+		-e 's/REPLACE_MIRROR_URL/$(MIRROR_URL)/' \
+		-e 's/REPLACE_MIRROR_PORT/$(MIRROR_PORT)/' \
+		-e 's|REPLACE_SSH_KEY|"$(NEW_SSH_KEY)"|' \
+		-e 's|REPLACE_REGISTRY_CERT|"$(NEW_REGISTRY_CERT)"|' \
+		$(CLUSTER_RELOCATION_TEMPLATE) > $@
 
-site-config.iso: $(CONFIG_DIR)/site-config.env
+
+site-config.iso: $(CONFIG_DIR)/cluster-relocation.yaml edge_configs/static_network.cfg
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		echo "Adding static network configuration to ISO"; \
-		cp static_network.cfg $(CONFIG_DIR)/enp1s0.nmconnection; \
+		cp edge_configs/static_network.cfg $(CONFIG_DIR)/enp1s0.nmconnection; \
 	fi
 	mkisofs -o site-config.iso -R -V "ZTC SNO" $(CONFIG_DIR)
 

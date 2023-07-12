@@ -5,20 +5,20 @@
     <bridge name='tt1' stp='on' delay='0'/>
     <mtu size='1500'/>
     <mac address='52:54:00:e0:8d:ff'/>
-    <domain name='CLUSTER_NAME.BASE_DOMAIN' localOnly='yes'/>
+    <domain name='DOMAIN' localOnly='yes'/>
     <dns enable='yes'>
         <host ip='REPLACE_HOST_IP'>
-            <hostname>api.CLUSTER_NAME.BASE_DOMAIN</hostname>
-            <hostname>api-int.CLUSTER_NAME.BASE_DOMAIN</hostname>
-            <hostname>console-openshift-console.apps.CLUSTER_NAME.BASE_DOMAIN</hostname>
-            <hostname>oauth-openshift.apps.CLUSTER_NAME.BASE_DOMAIN</hostname>
-            <hostname>canary-openshift-ingress-canary.apps.CLUSTER_NAME.BASE_DOMAIN</hostname>
+            <hostname>api.DOMAIN</hostname>
+            <hostname>api-int.DOMAIN</hostname>
+            <hostname>console-openshift-console.apps.DOMAIN</hostname>
+            <hostname>oauth-openshift.apps.DOMAIN</hostname>
+            <hostname>canary-openshift-ingress-canary.apps.DOMAIN</hostname>
         </host>
     </dns>
     <ip family='ipv4' address='192.168.128.1' prefix='24'>
         <dhcp>
             <range start='192.168.128.2' end='192.168.128.254'/>
-            <host mac='52:54:00:ee:42:e1' name='master1' ip='REPLACE_HOST_IP'/>
+            <host mac='52:54:00:ee:42:e1' name='REPLACE_HOSTNAME' ip='REPLACE_HOST_IP'/>
         </dhcp>
     </ip>
 </network>

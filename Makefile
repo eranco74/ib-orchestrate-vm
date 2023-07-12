@@ -81,6 +81,7 @@ wait-for-install-complete:
 ### Bake the image template
 
 bake: machineConfigs
+	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./relocation-operator.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/installation-configuration.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/dnsmasq.yaml
 	echo "Wait for mcp to update, the node will reboot in the process"

@@ -115,51 +115,6 @@ export CONSOLE_DOMAIN="console-openshift-console.${APPS_DOMAIN}"
 export DOWNLOADS_DOMAIN="downloads-openshift-console.${APPS_DOMAIN}"
 export OAUTH_DOMAIN="oauth-openshift.${APPS_DOMAIN}"
 
-echo "Update API"
-
-# Patch the apiserver
-envsubst << "EOF" >> api.patch
-spec:
-  servingCerts:
-    namedCertificates:
-    - names:
-      - ${API_DOMAIN}
-      servingCertificate:
-        name: api-tls
-EOF
-
-oc patch apiserver cluster --patch-file api.patch --type=merge
-
-# TODO: check that API got updated
-
-echo "Update ingress"
-envsubst << "EOF" >> domain.patch
-spec:
-  appsDomain: ${APPS_DOMAIN}
-  componentRoutes:
-  - hostname: ${CONSOLE_DOMAIN}
-    name: console
-    namespace: openshift-console
-    servingCertKeyPairSecret:
-      name: apps-tls
-  - hostname: ${DOWNLOADS_DOMAIN}
-    name: downloads
-    namespace: openshift-console
-    servingCertKeyPairSecret:
-      name: apps-tls
-  - hostname: ${OAUTH_DOMAIN}
-    name: oauth-openshift
-    namespace: openshift-authentication
-    servingCertKeyPairSecret:
-      name: apps-tls
-EOF
-
-oc patch ingress.config.openshift.io cluster --patch-file domain.patch --type merge
-
-echo "Re-configuring existing Routes"
-# They will get delete existing routes, they will get recreated by the
-oc delete routes --field-selector metadata.namespace!=openshift-console,metadata.namespace!=openshift-authentication -A
-
 # TODO: Update ssh-key?
 
 echo "Configure cluster registry"

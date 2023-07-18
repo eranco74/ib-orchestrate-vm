@@ -7,3 +7,4 @@ bootstrap-in-place-poc
 /bake/installation-configuration.yaml
 /bake/kubeadmin-kubeconfig
 /config-dir/
+/baked-kubeadmin-kubeconfig

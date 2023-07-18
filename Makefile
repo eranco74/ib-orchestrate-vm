@@ -51,7 +51,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) $(CONFIG_DIR)/site-config.env
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) $(CONFIG_DIR)/site-config.env bake/kubeadmin-kubeconfig
 
 .SILENT: destroy-libvirt
 
@@ -94,7 +94,7 @@ bake: bake/installation-configuration.yaml bake/dnsmasq.yaml bake/kubeadmin-kube
 bake/installation-configuration.yaml: bake/installation-configuration.sh butane-installation-configuration.yaml bake/kubeadmin-kubeconfig
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-installation-configuration.yaml > $@ || (rm $@ && false)
 
-bake/dnsmasq.yaml: bake/dnsmasq.yaml bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
+bake/dnsmasq.yaml: bake/force-dns-script bake/unmanaged-resolv.conf butane-dnsmasq.yaml
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-dnsmasq.yaml > $@ || (rm $@ && false)
 
 bake/kubeadmin-kubeconfig:

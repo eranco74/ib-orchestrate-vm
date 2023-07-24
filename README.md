@@ -18,10 +18,14 @@ Install SNO cluster with bootstrap-in-place:
 
 - Set `PULL_SECRET` environment variable to your pull secret:
 ```bash
-make start-iso
+make start-iso-abi
 ```
 
-monitor the progress using `make -C bootstrap-in-place-poc/ ssh` and `journalctl -f -u bootkube.service` or `kubectl --kubeconfig ./bootstrap-in-place-poc/sno-workdir/auth/kubeconfig get clusterversion`.
+- Monitor the progress using `make -C bootstrap-in-place-poc/ ssh` and `journalctl -f -u bootkube.service` or `kubectl --kubeconfig ./bootstrap-in-place-poc/sno-workdir/auth/kubeconfig get clusterversion`
+or execute:
+```bash
+make wait-for-install-complete
+```
 
 - Once the installation is complete create the image template:
 ```bash
@@ -40,7 +44,10 @@ mount the iso, read the configuration and start the reconfiguration process.
 - To copy the previous VM's image into `/var/lib/libvirt/images/SNO-baked-image.qcow2` and then create a new SNO instance from it, with the `site-config.iso` attached, run:
 
 ```bash
-make start-vm HOSTNAME=foobar
+make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 ```
+
+- In case you want to configure the new SNO with static network config add `STATIC_NETWORK=TRUE` to the above command.
+- In case you want to change the SNO hostname add `HOSTNAME=foobar` to the above command.
 
 - You can now monitor the progress using `make ssh` and `journalctl -f -u installation-configuration.service`

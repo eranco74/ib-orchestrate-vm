@@ -82,7 +82,7 @@ bootstrap-in-place-poc:
 
 wait-for-install-complete:
 	echo "Waiting for installation to complete"
-	until [ "$$(oc get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
+	until [ "$$(oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
 			echo "Still waiting for installation to complete ..."; \
 			sleep 10; \
 	done

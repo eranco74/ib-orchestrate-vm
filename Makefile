@@ -61,7 +61,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR)
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help
 
 .SILENT: destroy-libvirt
 
@@ -69,7 +69,7 @@ $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 start-iso: bootstrap-in-place-poc
 	make -C $(SNO_DIR) $@
 
-start-iso-abi: bootstrap-in-place-poc machineConfigs/internal-ip.yaml
+start-iso-abi: bootstrap-in-place-poc machineConfigs/internal-ip.yaml ## Install SNO cluster with ABI
 	@echo "Add the internal-ip machine config - this is required until https://github.com/openshift/machine-config-operator/pull/3774 is merged"
 	cp machineConfigs/internal-ip.yaml $(SNO_DIR)/manifests/
 	@echo "Replace the bootstrap-in-place agent-config.yaml with the config from this repo"
@@ -80,7 +80,7 @@ bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)
 	git clone https://github.com/eranco74/bootstrap-in-place-poc
 
-wait-for-install-complete:
+wait-for-install-complete: ## Wait for start-iso-abi to complete
 	echo "Waiting for installation to complete"
 	until [ "$$(oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
 			echo "Still waiting for installation to complete ..."; \
@@ -89,7 +89,7 @@ wait-for-install-complete:
 
 ### Bake the image template
 
-bake: machineConfigs
+bake: machineConfigs ## Add changes into image template
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./relocation-operator.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/installation-configuration.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/dnsmasq.yaml
@@ -152,7 +152,7 @@ network: destroy-libvirt $(NET_CONFIG)
 	$(SNO_DIR)/virt-create-net.sh
 
 # Destroy previously created VMs/Networks and create a VM/Network with the pre-baked image
-start-vm: checkenv $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LIBVIRT)
+start-vm: checkenv $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LIBVIRT) ## Copy sno-image.qcow2 and create new instance	make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	IMAGE=$(IMAGE_PATH_SNO_IN_LIBVIRT) \
 	VM_NAME=$(VM_NAME) \
 	NET_NAME=$(NET_NAME) \
@@ -183,7 +183,7 @@ $(CONFIG_DIR)/cluster-relocation.yaml: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLA
 		$(CLUSTER_RELOCATION_TEMPLATE) > $@
 
 
-site-config.iso: $(CONFIG_DIR)/cluster-relocation.yaml edge_configs/static_network.cfg
+site-config.iso: $(CONFIG_DIR)/cluster-relocation.yaml edge_configs/static_network.cfg ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		echo "Adding static network configuration to ISO"; \
 		cp edge_configs/static_network.cfg $(CONFIG_DIR)/enp1s0.nmconnection; \
@@ -209,3 +209,5 @@ destroy-libvirt:
         VOL_NAME=$(VOL_NAME) \
 	$(SNO_DIR)/virt-delete-sno.sh || true
 
+help:   ## Shows this message.
+		@grep -E '^[a-zA-Z_\.\-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'

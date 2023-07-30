@@ -188,7 +188,7 @@ site-config.iso: $(CONFIG_DIR)/cluster-relocation.yaml edge_configs/static_netwo
 		echo "Adding static network configuration to ISO"; \
 		cp edge_configs/static_network.cfg $(CONFIG_DIR)/enp1s0.nmconnection; \
 	fi
-	mkisofs -o site-config.iso -R -V "ZTC SNO" $(CONFIG_DIR)
+	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 	sudo cp site-config.iso $(LIBVIRT_IMAGE_PATH)

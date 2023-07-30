@@ -23,7 +23,7 @@ function umount_config {
 
 RELOCATION_CONFIG_PATH=/opt/openshift/cluster-relocation.yaml
 echo "Waiting for ${RELOCATION_CONFIG_PATH}"
-while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name') && ! -f "${RELOCATION_CONFIG_PATH}" ]];
+while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name') && ! -f "${RELOCATION_CONFIG_PATH}" ]];
 do
   echo "Waiting for site-config"
   sleep 5

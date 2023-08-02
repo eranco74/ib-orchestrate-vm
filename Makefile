@@ -90,7 +90,7 @@ bootstrap-in-place-poc:
 
 wait-for-install-complete: ## Wait for start-iso-abi to complete
 	echo "Waiting for installation to complete"
-	until [ "$$(oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
+	until [ "$$($(oc) get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
 			echo "Still waiting for installation to complete ..."; \
 			sleep 10; \
 	done
@@ -135,12 +135,12 @@ external-container-partition: ## Configure sno-test to use external /var/lib/con
 	until $(oc) wait --timeout=20m --for=condition=updated=true mcp master; do echo -n .; sleep 10; done; echo
 
 bake: machineConfigs ## Add changes into image template
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./relocation-operator.yaml
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/installation-configuration.yaml
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/dnsmasq.yaml
+	$(oc) apply -f ./relocation-operator.yaml
+	$(oc) apply -f ./machineConfigs/installation-configuration.yaml
+	$(oc) apply -f ./machineConfigs/dnsmasq.yaml
 	echo "Wait for mcp to update, the node will reboot in the process"
 	sleep 120
-	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig wait --timeout=20m --for=condition=updated=true mcp master
+	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
 
 	# TODO: add this once we have the bootstrap script
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"

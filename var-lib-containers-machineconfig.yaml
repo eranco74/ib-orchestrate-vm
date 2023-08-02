@@ -1,0 +1,52 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: master
+  name: 98-var-lib-containers
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    storage:
+      files:
+        - contents:
+            source: data:text/plain;charset=utf-8;base64,W2NyaW9dCmNsZWFuX3NodXRkb3duX2ZpbGUgPSAiIgo=
+          mode: 420
+          path: /etc/crio/crio.conf.d/99-crio-disable-wipe.toml
+    systemd:
+      units:
+      - contents: |
+          [Unit]
+          Description=Mount /dev/vda5 to /var/lib/containers
+          Before=local-fs.target
+          BindsTo=dev-vda5.device
+          After=dev-vda5.device var.mount
+
+          [Mount]
+          What=/dev/vda5
+          Where=/var/lib/containers
+          Type=xfs
+          Options=defaults,prjquota
+
+          [Install]
+          WantedBy=local-fs.target
+        enabled: true
+        name: var-lib-containers.mount
+      - contents: |
+          [Unit]
+          Description=Restore recursive SELinux security contexts
+          DefaultDependencies=no
+          After=var-lib-containers.mount
+          Before=crio.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/sbin/restorecon -R /var/lib/containers/
+          TimeoutSec=0
+
+          [Install]
+          WantedBy=multi-user.target graphical.target
+        enabled: true
+        name: restorecon-var-lib-containers.service

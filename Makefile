@@ -66,7 +66,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition
 
 .SILENT: destroy-libvirt
 
@@ -116,6 +116,24 @@ vdu: ## Apply VDU profile to sno-test
 	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-ptp ptp-operator-subscription
 	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-sriov-network-operator sriov-network-operator-subscription
 
+external-container-partition: ## Configure sno-test to use external /var/lib/containers
+	virsh shutdown sno-test
+	make wait-for-shutdown
+	qemu-img resize $(BASE_IMAGE_PATH_SNO) +50G
+	qemu-nbd --connect /dev/nbd0 $(BASE_IMAGE_PATH_SNO)
+	sgdisk -e /dev/nbd0
+	echo "n_p_5____w_y"| tr _ \\n | gdisk /dev/nbd0
+	mkfs.xfs /dev/nbd0p5
+	qemu-nbd --disconnect /dev/nbd0
+	virsh start sno-test
+	make wait-for-install-complete
+	$(oc) apply -f var-lib-containers-machineconfig.yaml
+	until $(oc) get mcp master -oyaml | yq -r .status.configuration.source[].name | grep -xq 98-var-lib-containers; do \
+		echo "Waiting for 98-var-lib-containers to be present in running rendered-master MachineConfig"; \
+		sleep 5; \
+	done
+	until $(oc) wait --timeout=20m --for=condition=updated=true mcp master; do echo -n .; sleep 10; done; echo
+
 bake: machineConfigs ## Add changes into image template
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./relocation-operator.yaml
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./machineConfigs/installation-configuration.yaml
@@ -131,6 +149,15 @@ bake: machineConfigs ## Add changes into image template
 	sleep 60 && sudo virsh destroy sno-test
 	make wait-for-shutdown
 	sudo virsh undefine sno-test
+
+remove-container-partition: ## Remove extra /var/lib/containers partition from baked image
+	qemu-nbd --connect /dev/nbd0 $(BASE_IMAGE_PATH_SNO)
+	echo "d_5_w_y"| tr _ \\n | gdisk /dev/nbd0
+	qemu-nbd --disconnect /dev/nbd0
+	qemu-img resize --shrink $(BASE_IMAGE_PATH_SNO) -50G
+	qemu-nbd --connect /dev/nbd0 $(BASE_IMAGE_PATH_SNO)
+	sgdisk -e /dev/nbd0
+	qemu-nbd --disconnect /dev/nbd0
 
 machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 

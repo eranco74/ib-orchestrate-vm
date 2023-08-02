@@ -18,6 +18,8 @@ IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
 CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/cluster-relocation.template
 MACHINE_NETWORK ?= 192.168.127.0/24
+CPU_CORE ?= 16
+RAM_MB ?= 32768
 
 NET_CONFIG_TEMPLATE = $(IMAGE_BASED_DIR)/template-net.xml
 NET_CONFIG = $(IMAGE_BASED_DIR)/net.xml
@@ -37,6 +39,9 @@ SSH_FLAGS = -o IdentityFile=$(SSH_KEY_PRIV_PATH) \
 
 HOST_IP = 192.168.128.10
 SSH_HOST = core@$(HOST_IP)
+
+SNO_KUBECONFIG = $(SNO_DIR)/sno-workdir/auth/kubeconfig
+oc = oc --kubeconfig $(SNO_KUBECONFIG)
 
 # Relocation config
 CLUSTER_NAME ?= new-name
@@ -61,7 +66,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu
 
 .SILENT: destroy-libvirt
 
@@ -74,7 +79,10 @@ start-iso-abi: bootstrap-in-place-poc machineConfigs/internal-ip.yaml ## Install
 	cp machineConfigs/internal-ip.yaml $(SNO_DIR)/manifests/
 	@echo "Replace the bootstrap-in-place agent-config.yaml with the config from this repo"
 	cp agent-config.yaml $(SNO_DIR)
-	MACHINE_NETWORK=${MACHINE_NETWORK} make -C $(SNO_DIR) $@
+	make -C $(SNO_DIR) $@ \
+		MACHINE_NETWORK=${MACHINE_NETWORK} \
+		CPU_CORE=$(CPU_CORE) \
+		RAM_MB=$(RAM_MB)
 
 bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)
@@ -88,6 +96,25 @@ wait-for-install-complete: ## Wait for start-iso-abi to complete
 	done
 
 ### Bake the image template
+
+vdu: ## Apply VDU profile to sno-test
+	$(oc) apply -f ./vdu/01-namespaces.yaml
+	$(oc) apply -f ./vdu/02-subscriptions.yaml
+	$(oc) apply -f ./vdu/03-configurations.yaml
+	$(oc) apply -f ./vdu/04-node-tuning.yaml
+	# Wait for generated machineconfig to have performanceprofile and tuned baked in
+	for i in 50-performance-openshift-node-performance-profile 99-master-generated-kubelet; do \
+		until $(oc) get mcp master -oyaml | yq -r .status.configuration.source[].name | grep -xq $$i; do \
+			echo "Waiting for $$i to be present in running rendered-master MachineConfig"; \
+			sleep 5; \
+		done; \
+	done
+	# Wait for generated machineconfig to be applied
+	until $(oc) wait --timeout=20m --for=condition=updated=true mcp master; do echo -n .; sleep 10; done; echo
+	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-local-storage local-storage-operator
+	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-logging cluster-logging
+	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-ptp ptp-operator-subscription
+	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-sriov-network-operator sriov-network-operator-subscription
 
 bake: machineConfigs ## Add changes into image template
 	oc --kubeconfig $(SNO_DIR)/sno-workdir/auth/kubeconfig apply -f ./relocation-operator.yaml
@@ -157,6 +184,8 @@ start-vm: checkenv $(IMAGE_PATH_SNO_IN_LIBVIRT) network $(SITE_CONFIG_PATH_IN_LI
 	VM_NAME=$(VM_NAME) \
 	NET_NAME=$(NET_NAME) \
 	SITE_CONFIG=$(SITE_CONFIG_PATH_IN_LIBVIRT) \
+	CPU_CORE=$(CPU_CORE) \
+	RAM_MB=$(RAM_MB) \
 	$(IMAGE_BASED_DIR)/virt-install-sno.sh
 
 

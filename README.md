@@ -51,3 +51,23 @@ make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 - In case you want to change the SNO hostname add `HOSTNAME=foobar` to the above command.
 
 - You can now monitor the progress using `make ssh` and `journalctl -f -u installation-configuration.service`
+
+## Extra goodies
+
+### vDU profile
+A vDU profile can be applied to the image before baking with
+```bash
+make vdu
+```
+
+### Use new partition for /var/lib/containers
+A 5th partition can be created to store the /var/lib/containers separately
+Before baking, run:
+```bash
+make external-container-partition
+```
+
+To keep the configuration for using an external partition /var/lib/containers, without including that partition into the final image, after baking run:
+```bash
+make remove-container-partition
+```

@@ -98,41 +98,14 @@ wait-for-install-complete: ## Wait for start-iso-abi to complete
 ### Bake the image template
 
 vdu: ## Apply VDU profile to sno-test
-	$(oc) apply -f ./vdu/01-namespaces.yaml
-	$(oc) apply -f ./vdu/02-subscriptions.yaml
-	$(oc) apply -f ./vdu/03-configurations.yaml
-	$(oc) apply -f ./vdu/04-node-tuning.yaml
-	# Wait for generated machineconfig to have performanceprofile and tuned baked in
-	for i in 50-performance-openshift-node-performance-profile 99-master-generated-kubelet; do \
-		until $(oc) get mcp master -oyaml | yq -r .status.configuration.source[].name | grep -xq $$i; do \
-			echo "Waiting for $$i to be present in running rendered-master MachineConfig"; \
-			sleep 5; \
-		done; \
-	done
-	# Wait for generated machineconfig to be applied
-	until $(oc) wait --timeout=20m --for=condition=updated=true mcp master; do echo -n .; sleep 10; done; echo
-	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-local-storage local-storage-operator
-	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-logging cluster-logging
-	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-ptp ptp-operator-subscription
-	$(oc) wait subscription --timeout=20m --for=jsonpath={.status.state}=AtLatestKnown -n openshift-sriov-network-operator sriov-network-operator-subscription
+	KUBECONFIG=$(SNO_KUBECONFIG) \
+	$(IMAGE_BASED_DIR)/vdu-profile.sh
 
 external-container-partition: ## Configure sno-test to use external /var/lib/containers
-	virsh shutdown sno-test
-	make wait-for-shutdown
-	qemu-img resize $(BASE_IMAGE_PATH_SNO) +50G
-	qemu-nbd --connect /dev/nbd0 $(BASE_IMAGE_PATH_SNO)
-	sgdisk -e /dev/nbd0
-	echo "n_p_5____w_y"| tr _ \\n | gdisk /dev/nbd0
-	mkfs.xfs /dev/nbd0p5
-	qemu-nbd --disconnect /dev/nbd0
-	virsh start sno-test
-	make wait-for-install-complete
-	$(oc) apply -f var-lib-containers-machineconfig.yaml
-	until $(oc) get mcp master -oyaml | yq -r .status.configuration.source[].name | grep -xq 98-var-lib-containers; do \
-		echo "Waiting for 98-var-lib-containers to be present in running rendered-master MachineConfig"; \
-		sleep 5; \
-	done
-	until $(oc) wait --timeout=20m --for=condition=updated=true mcp master; do echo -n .; sleep 10; done; echo
+	VM_NAME=sno-test \
+	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
+	KUBECONFIG=$(SNO_KUBECONFIG) \
+	$(IMAGE_BASED_DIR)/external-varlibcontainers-create.sh
 
 bake: machineConfigs ## Add changes into image template
 	$(oc) apply -f ./relocation-operator.yaml
@@ -151,13 +124,8 @@ bake: machineConfigs ## Add changes into image template
 	sudo virsh undefine sno-test
 
 remove-container-partition: ## Remove extra /var/lib/containers partition from baked image
-	qemu-nbd --connect /dev/nbd0 $(BASE_IMAGE_PATH_SNO)
-	echo "d_5_w_y"| tr _ \\n | gdisk /dev/nbd0
-	qemu-nbd --disconnect /dev/nbd0
-	qemu-img resize --shrink $(BASE_IMAGE_PATH_SNO) -50G
-	qemu-nbd --connect /dev/nbd0 $(BASE_IMAGE_PATH_SNO)
-	sgdisk -e /dev/nbd0
-	qemu-nbd --disconnect /dev/nbd0
+	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
+	$(IMAGE_BASED_DIR)/external-varlibcontainers-remove-partition.sh
 
 machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 

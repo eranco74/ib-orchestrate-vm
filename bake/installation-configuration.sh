@@ -29,7 +29,7 @@ do
   sleep 5
 done
 
-DEVICE=$(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "ZTC SNO") | .name')
+DEVICE=$(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name')
 if [[ -n ${DEVICE+x} && ! -f "${RELOCATION_CONFIG_PATH}" ]]; then
   mount_config "${DEVICE}"
   cp -r /mnt/config/* $(dirname ${RELOCATION_CONFIG_PATH})

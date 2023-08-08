@@ -32,7 +32,7 @@ make wait-for-install-complete
 make bake
 ```
 
-This will apply machine configs to the SNO instance and then shut it down.
+This will apply machine configs to the SNO instance (named sno-test) and then remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno-test.qcow2.
 
 - Create the site-config iso wiht the configuration for the SNO instance at edge site:
 ```bash

@@ -53,6 +53,25 @@ else
     echo "Static network configuration do not exist"
 fi
 
+# Recertify
+function recert {
+  RELEASE_IMAGE=quay.io/openshift-release-dev/ocp-release:4.13.5-x86_64
+  ETCD_IMAGE="$(oc adm release extract --from="$RELEASE_IMAGE" --file=image-references | jq '.spec.tags[] | select(.name == "etcd").from.name' -r)"
+  RECERT_IMAGE="quay.io/otuchfel/recert:latest"
+  sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store
+  sleep 10 # TODO: wait for etcd
+  sudo podman run -it --network=host --privileged -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} \
+      --etcd-endpoint localhost:2379 \
+      --static-dir /kubernetes \
+      --static-dir /kubelet \
+      --static-dir /machine-config-daemon \
+
+  sudo podman kill recert_etcd
+
+}
+
+sleep 30 # TODO: wait for weird network DHCP/DNS issue to resolve
+recert
 
 # TODO check if we really need to stop kubelet
 echo "Starting kubelet"

@@ -27,12 +27,32 @@ or execute:
 make wait-for-install-complete
 ```
 
+- (OPTIONAL) Now we can apply extra configurations to the node, for example, the vDU profile:
+```bash
+make vdu
+```
+
 - Once the installation is complete create the image template:
 ```bash
 make bake
 ```
 
-This will apply machine configs to the SNO instance (named sno-test) and then remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno-test.qcow2.
+This will apply machine configs to the SNO instance (named sno-test).
+
+- (OPTIONAL) With the cluster ready we can create an ostree backup to be imported in an existing SNO
+To do so, the credentials for writing in $BACKUP_REPO must be in an environment variable called `BACKUP_SECRET`, and then run:
+```bash
+make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
+```
+
+This will backup /var and /etc changes in an OCI container.
+
+- Once the preparation is complete, we should shutdown and undefine the VM
+```bash
+make stop-baked-vm
+```
+
+This will shutdown the VM and remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno-test.qcow2.
 
 - Create the site-config iso wiht the configuration for the SNO instance at edge site:
 ```bash
@@ -53,6 +73,18 @@ make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 - You can now monitor the progress using `make ssh` and `journalctl -f -u installation-configuration.service`
 
 ## Extra goodies
+
+### Restore OSTree relocation image into existing SNO
+#### Prerequisites
+- A image must be created before with `make ostree-backup` (see above)
+- The ssh key bootstrap-in-place-poc/ssh-key/key.pub must be authorized for the user core in the recipient SNO
+- `PULL_SECRET` and `BACKUP_SECRET` environment variables must be set as explained above
+#### Procedure
+Run the restore script:
+```bash
+make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=recipient-sno
+```
+And then reboot the recipient-sno host
 
 ### vDU profile
 A vDU profile can be applied to the image before baking with

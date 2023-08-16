@@ -6,3 +6,4 @@ bootstrap-in-place-poc
 /site-config.iso
 /bake/installation-configuration.yaml
 /config-dir/
+/credentials/

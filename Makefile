@@ -66,7 +66,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition ostree-backup ostree-restore
 
 .SILENT: destroy-libvirt
 
@@ -97,16 +97,6 @@ wait-for-install-complete: ## Wait for start-iso-abi to complete
 
 ### Bake the image template
 
-vdu: ## Apply VDU profile to sno-test
-	KUBECONFIG=$(SNO_KUBECONFIG) \
-	$(IMAGE_BASED_DIR)/vdu-profile.sh
-
-external-container-partition: ## Configure sno-test to use external /var/lib/containers
-	VM_NAME=sno-test \
-	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
-	KUBECONFIG=$(SNO_KUBECONFIG) \
-	$(IMAGE_BASED_DIR)/external-varlibcontainers-create.sh
-
 bake: machineConfigs ## Add changes into image template
 	$(oc) apply -f ./relocation-operator.yaml
 	$(oc) apply -f ./machineConfigs/installation-configuration.yaml
@@ -114,18 +104,29 @@ bake: machineConfigs ## Add changes into image template
 	echo "Wait for mcp to update, the node will reboot in the process"
 	sleep 120
 	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
-
 	# TODO: add this once we have the bootstrap script
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
-	make -C $(SNO_DIR) ssh CMD="sudo shutdown"
-	# for some reason the libvirt VM stay running, wait 60 seconds and destroy it
-	sleep 60 && sudo virsh destroy sno-test
+
+stop-baked-vm: ## Shutdown and undefine sno-test
+	sudo virsh shutdown sno-test
 	make wait-for-shutdown
 	sudo virsh undefine sno-test
 
-remove-container-partition: ## Remove extra /var/lib/containers partition from baked image
-	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
-	$(IMAGE_BASED_DIR)/external-varlibcontainers-remove-partition.sh
+ostree-backup: ## Backup sno-test into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
+	@test '$(BACKUP_SECRET)' || { echo "BACKUP_SECRET must be defined"; exit 1; }
+	mkdir -p credentials
+	echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
+	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@sno-test:.
+	ssh $(SSH_FLAGS) core@sno-test sudo BACKUP_REPO=$(BACKUP_REPO) ./ostree-backup.sh
+
+ostree-restore: ## Restore SNO from ostree OCI			make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=recipient-sno
+	@test '$(BACKUP_SECRET)' || { echo "BACKUP_SECRET must be defined"; exit 1; }
+	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
+	mkdir -p credentials
+	echo '$(PULL_SECRET)' > credentials/pull-secret.json
+	echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
+	scp $(SSH_FLAGS) ostree-restore.sh credentials/*-secret.json core@$(HOST):.
+	ssh $(SSH_FLAGS) core@$(HOST) sudo BACKUP_REPO=$(BACKUP_REPO) ./ostree-restore.sh
 
 machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 
@@ -223,6 +224,20 @@ update_script:
 	cat bake/installation-configuration.sh | ssh $(SSH_FLAGS) $(SSH_HOST) "sudo tee /usr/local/bin/installation-configuration.sh"
 	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl daemon-reload"
 	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl restart installation-configuration.service --no-block"
+
+vdu: ## Apply VDU profile to sno-test
+	KUBECONFIG=$(SNO_KUBECONFIG) \
+	$(IMAGE_BASED_DIR)/vdu-profile.sh
+
+external-container-partition: ## Configure sno-test to use external /var/lib/containers
+	VM_NAME=sno-test \
+	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
+	KUBECONFIG=$(SNO_KUBECONFIG) \
+	$(IMAGE_BASED_DIR)/external-varlibcontainers-create.sh
+
+remove-container-partition: ## Remove extra /var/lib/containers partition from baked image
+	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
+	$(IMAGE_BASED_DIR)/external-varlibcontainers-remove-partition.sh
 
 ### Cleanup
 

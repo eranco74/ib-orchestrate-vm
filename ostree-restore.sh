@@ -27,10 +27,10 @@ cp pull-secret.json /etc/ostree/auth.json
 ostree container unencapsulate --repo /ostree/repo $base_container | tee /tmp/unencapsulate.base
 ostree refs --create base $(cut -d ' ' -f 2 < /tmp/unencapsulate.base)
 
-ostree admin os-init --sysroot /sysroot $new_osname
+ostree admin os-init $new_osname
 log_it Deploying new stateroot
-ostree admin deploy --retain --sysroot /sysroot --os $new_osname base
-ostree_deploy=$(ostree admin status --sysroot /sysroot|awk /$new_osname/'{print $2}')
+ostree admin deploy --retain --os $new_osname base
+ostree_deploy=$(ostree admin status |awk /$new_osname/'{print $2}')
 log_it Restoring /var
 ostree cat backup /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 

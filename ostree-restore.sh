@@ -23,11 +23,10 @@ base_container=$(ostree cat backup /rpm-ostree.status | awk '/ostree-unverified-
 
 log_it Importing base OCI
 cp pull-secret.json /etc/ostree/auth.json
-ostree container unencapsulate --repo /ostree/repo $base_container --write-ref base
 
 ostree admin os-init $new_osname
 log_it Deploying new stateroot
-ostree admin deploy --retain --os $new_osname base
+ostree container image deploy --sysroot / --stateroot $new_osname --imgref ${base_container}
 ostree_deploy=$(ostree admin status |awk /$new_osname/'{print $2}')
 
 log_it Restoring /var

@@ -21,22 +21,22 @@ function umount_config {
   rm -rf /mnt/config
 }
 
-RELOCATION_CONFIG_PATH=/opt/openshift/cluster-relocation.yaml
+RELOCATION_CONFIG_PATH=/opt/openshift/cluster-configuration
 echo "Waiting for ${RELOCATION_CONFIG_PATH}"
-while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name') && ! -f "${RELOCATION_CONFIG_PATH}" ]];
+while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name') && ! -d "${RELOCATION_CONFIG_PATH}" ]];
 do
   echo "Waiting for site-config"
   sleep 5
 done
 
 DEVICE=$(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name')
-if [[ -n ${DEVICE+x} && ! -f "${RELOCATION_CONFIG_PATH}" ]]; then
+if [[ -n ${DEVICE+x} && ! -d "${RELOCATION_CONFIG_PATH}" ]]; then
   mount_config "${DEVICE}"
   cp -r /mnt/config/* $(dirname ${RELOCATION_CONFIG_PATH})
 fi
 
-if [ ! -f "${RELOCATION_CONFIG_PATH}" ]; then
-  echo "Failed to find configuration file at ${RELOCATION_CONFIG_PATH}"
+if [ ! -d "${RELOCATION_CONFIG_PATH}" ]; then
+  echo "Failed to find cluster configuration at ${RELOCATION_CONFIG_PATH}"
   exit 1
 fi
 
@@ -181,7 +181,7 @@ EOF
   systemctl restart dnsmasq
 fi
 
-echo "Applying cluster relocation CR"
+echo "Applying cluster configuration"
 oc apply -f "${RELOCATION_CONFIG_PATH}"
 echo "Waiting for cluster relocation status"
 oc wait --timeout=1h clusterrelocation cluster --for condition=Reconciled=true

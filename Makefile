@@ -68,7 +68,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition ostree-backup ostree-restore
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition ostree-backup ostree-restore create-config copy-config
 
 .SILENT: destroy-libvirt
 
@@ -114,21 +114,19 @@ stop-baked-vm: ## Shutdown and undefine sno-test
 	make wait-for-shutdown
 	sudo virsh undefine sno-test
 
-ostree-backup: ## Backup sno-test into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
+credentials/backup-secret.json:
 	@test '$(BACKUP_SECRET)' || { echo "BACKUP_SECRET must be defined"; exit 1; }
 	mkdir -p credentials
 	echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
-	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@sno-test:.
-	ssh $(SSH_FLAGS) core@sno-test sudo BACKUP_REPO=$(BACKUP_REPO) ./ostree-backup.sh
 
-ostree-restore: ## Restore SNO from ostree OCI			make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=recipient-sno
-	@test '$(BACKUP_SECRET)' || { echo "BACKUP_SECRET must be defined"; exit 1; }
+ostree-backup: credentials/backup-secret.json ## Backup sno-test into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
+	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@sno-test:.
+	ssh $(SSH_FLAGS) core@sno-test sudo ./ostree-backup.sh $(BACKUP_REPO)
+
+ostree-restore: credentials/backup-secret.json ## Restore SNO from ostree OCI			make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=recipient-sno
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
-	mkdir -p credentials
-	echo '$(PULL_SECRET)' > credentials/pull-secret.json
-	echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 	scp $(SSH_FLAGS) ostree-restore.sh credentials/*-secret.json core@$(HOST):.
-	ssh $(SSH_FLAGS) core@$(HOST) sudo BACKUP_REPO=$(BACKUP_REPO) ./ostree-restore.sh
+	ssh $(SSH_FLAGS) core@$(HOST) sudo ./ostree-restore.sh $(BACKUP_REPO)
 
 machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 
@@ -213,14 +211,22 @@ $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE
 		$(PULL_SECRET_TEMPLATE) > $@/$(notdir $(PULL_SECRET_TEMPLATE))
 	cp $(NAMESPACE_TEMPLATE) $@/$(notdir $(NAMESPACE_TEMPLATE))
 
-site-config.iso: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
+create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		echo "Adding static network configuration to ISO"; \
 		mkdir $(CONFIG_DIR)/network-configuration
 		cp edge_configs/static_network.cfg $(CONFIG_DIR)/network-configuration/enp1s0.nmconnection; \
 	fi
 	cp -r edge_configs/extra-manifests $(CONFIG_DIR)
+
+site-config.iso: create-config ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)
+
+copy-config: create-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=recipient-sno
+	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
+	echo "Copying site-config to $(HOST)"
+	ssh $(SSH_FLAGS) core@$(HOST) sudo mkdir -p /sysroot/ostree/deploy/ingrade/var/opt/openshift
+	tar czC $(CONFIG_DIR) . | ssh $(SSH_FLAGS) core@$(HOST) sudo tar xvzC /sysroot/ostree/deploy/ingrade/var/opt/openshift --no-same-owner
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 	sudo cp site-config.iso $(LIBVIRT_IMAGE_PATH)

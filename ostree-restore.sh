@@ -1,9 +1,13 @@
 #!/bin/bash
 
-new_osname=javipolo
-backup_repo=${BACKUP_REPO:-quay.io/jpolo/ostmagic}
+new_osname=ingrade
+backup_repo=${1:-$BACKUP_REPO}
 backup_tag=backup
+base_tag=base
+parent_tag=parent
 backup_refspec=$backup_repo:$backup_tag
+base_refspec=$backup_repo:$base_tag
+parent_refspec=$backup_repo:$parent_tag
 
 log_it(){
     echo $@ | tr [:print:] -
@@ -11,28 +15,45 @@ log_it(){
     echo $@ | tr [:print:] -
 }
 
+build_kargs(){
+    local karg
+    ostree cat $backup_tag /mco-currentconfig.json \
+        | jq -r '.spec.kernelArguments[]' \
+        | xargs --no-run-if-empty -I% echo -n "--karg % "
+}
+
+if [[ -z "$backup_repo" ]]; then
+    echo "ERROR. Backup repo is empty"
+    exit 1
+fi
+
 mount /sysroot -o remount,rw
 
 # Import OCIs
 log_it Importing backup OCI
 cp backup-secret.json /etc/ostree/auth.json
-ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$backup_refspec --write-ref backup
+ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$backup_refspec --write-ref $backup_tag
 
-# Get base_container from rpm-ostree status of donor
-base_container=$(ostree cat backup /rpm-ostree.status | awk '/ostree-unverified-registry/{print $NF}')
+# If there's a parent to that commit, import it
+if [[ "$(ostree cat $backup_tag /rpm-ostree.json | jq -r '.deployments[] | select(.booted == true)| has("base-checksum")')" == "true" ]]; then
+    log_it Parent commit found for base, importing OCI
+    ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$parent_refspec --write-ref $parent_tag
+fi
 
-log_it Importing base OCI
-cp pull-secret.json /etc/ostree/auth.json
-
+log_it Initializing and deploying new stateroot
 ostree admin os-init $new_osname
-log_it Deploying new stateroot
-ostree container image deploy --sysroot / --stateroot $new_osname --imgref ${base_container}
-ostree_deploy=$(ostree admin status |awk /$new_osname/'{print $2}')
+ostree container image deploy --sysroot / --stateroot $new_osname $(build_kargs) --imgref ostree-unverified-registry:$base_refspec
+ostree_deploy=$(ostree admin status | awk /$new_osname/'{print $2}')
+
+# Workaround to fix deploy origin URL
+log_it Restoring original osImageURL to new stateroot origin
+original_osimage=$(ostree cat backup /mco-currentconfig.json | jq -r .spec.osImageURL)
+sed -e "s%docker://.*%$original_osimage%g" -i /ostree/deploy/$new_osname/deploy/$ostree_deploy.origin
 
 log_it Restoring /var
-ostree cat backup /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
+ostree cat $backup_tag /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 
 log_it Restoring /etc
-ostree cat backup /etc.tgz | tar xzC /ostree/deploy/$new_osname/deploy/$ostree_deploy
+ostree cat $backup_tag /etc.tgz | tar xzC /ostree/deploy/$new_osname/deploy/$ostree_deploy --selinux
 
 log_it DONE. You can reboot into the restored system

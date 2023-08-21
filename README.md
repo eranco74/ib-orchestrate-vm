@@ -78,7 +78,7 @@ make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 #### Prerequisites
 - A image must be created before with `make ostree-backup` (see above)
 - The ssh key bootstrap-in-place-poc/ssh-key/key.pub must be authorized for the user core in the recipient SNO
-- `PULL_SECRET` and `BACKUP_SECRET` environment variables must be set as explained above
+- `BACKUP_SECRET` environment variable must be set as explained above
 #### Procedure
 Run the restore script:
 ```bash
@@ -102,4 +102,38 @@ make external-container-partition
 To keep the configuration for using an external partition /var/lib/containers, without including that partition into the final image, after baking run:
 ```bash
 make remove-container-partition
+```
+
+## Examples
+### Full run with vDU profile and ostree
+#### Prerequisites
+Let's first define a few environment variables:
+```
+BACKUP_REPO=quay.io/whatever/ostbackup
+RECIPIENT_HOST=sno
+export PULL_SECRET=$(jq -c . /path/to/my/pull-secret.json)
+export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
+```
+#### Creation of relocatable image
+- Create new VM, apply the vDU profile, the relocation needed things, and create an ostree backup:
+```
+make start-iso-abi wait-for-install-complete vdu bake ostree-backup stop-baked-vm BACKUP_REPO=$BACKUP_REPO
+```
+#### Installing the backup into a running SNO
+- Copy the ssh key:
+```
+ssh-copy-id -i bootstrap-in-place-poc/ssh-key/key.pub core@$RECIPIENT_HOST
+```
+- Restore the backup and copy site-config:
+```
+make ostree-restore copy-config BACKUP_REPO=$BACKUP_REPO HOST=$RECIPIENT_HOST CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
+```
+- Reboot the recipient host
+- After host boots and finishes initialization process, copy new kubeconfig:
+```
+ssh -i bootstrap-in-place-poc/ssh-key/key core@$RECIPIENT_HOST sudo cat /etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig > $RECIPIENT_HOST.kubeconfig
+```
+- Wait until relocation operator finishes:
+```
+oc --kubeconfig $RECIPIENT_HOST.kubeconfig get clusterrelocation cluster -ojson | jq .status.conditions
 ```

@@ -27,8 +27,9 @@ ostree container unencapsulate --repo /ostree/repo $base_container --write-ref b
 
 ostree admin os-init $new_osname
 log_it Deploying new stateroot
-ostree admin deploy --os $new_osname base
-ostree_deploy=$(ostree admin status | awk /$new_osname/'{print $2}')
+ostree admin deploy --retain --os $new_osname base
+ostree_deploy=$(ostree admin status |awk /$new_osname/'{print $2}')
+
 log_it Restoring /var
 ostree cat backup /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 

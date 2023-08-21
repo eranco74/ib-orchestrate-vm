@@ -21,6 +21,7 @@ function umount_config {
   rm -rf /mnt/config
 }
 
+EXTRA_MANIFESTS_PATH=/opt/openshift/extra-manifests
 RELOCATION_CONFIG_PATH=/opt/openshift/cluster-configuration
 echo "Waiting for ${RELOCATION_CONFIG_PATH}"
 while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name') && ! -d "${RELOCATION_CONFIG_PATH}" ]];
@@ -187,6 +188,10 @@ echo "Waiting for cluster relocation status"
 oc wait --timeout=1h clusterrelocation cluster --for condition=Reconciled=true
 echo "Cluster configuration updated"
 
+if [ -d ${EXTRA_MANIFESTS_PATH} ]; then
+  echo "Applying extra-manifests"
+  oc apply -f "${EXTRA_MANIFESTS_PATH}"
+fi
 
 verify_csr_addresses() {
   local csr=${1}

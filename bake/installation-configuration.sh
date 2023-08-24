@@ -23,6 +23,8 @@ function umount_config {
 
 EXTRA_MANIFESTS_PATH=/opt/openshift/extra-manifests
 RELOCATION_CONFIG_PATH=/opt/openshift/cluster-configuration
+NETWORK_CONFIG_PATH=/opt/openshift/network-configuration
+
 echo "Waiting for ${RELOCATION_CONFIG_PATH}"
 while [[ ! $(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name') && ! -d "${RELOCATION_CONFIG_PATH}" ]];
 do
@@ -45,11 +47,11 @@ echo "${RELOCATION_CONFIG_PATH} has been created"
 # Replace this with a function that loads values from yaml file
 set +o allexport
 
-if ls /opt/openshift/*.nmconnection 1> /dev/null 2>&1; then
-    echo "Static network configuration exist"
-    cp /opt/openshift/*.nmconnection /etc/NetworkManager/system-connections/ -f
-    systemctl restart NetworkManager
-    # TODO: we might need to delete the connection first
+[ ! -d "${NETWORK_CONFIG_PATH}" ]; then
+  echo "Static network configuration exist"
+  cp "${NETWORK_CONFIG_PATH}"/*.nmconnection /etc/NetworkManager/system-connections/ -f
+  systemctl restart NetworkManager
+  # TODO: we might need to delete the connection first
 else
     echo "Static network configuration do not exist"
 fi

@@ -216,7 +216,8 @@ $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE
 site-config.iso: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		echo "Adding static network configuration to ISO"; \
-		cp edge_configs/static_network.cfg $(CONFIG_DIR)/enp1s0.nmconnection; \
+		mkdir $(CONFIG_DIR)/network-configuration
+		cp edge_configs/static_network.cfg $(CONFIG_DIR)/network-configuration/enp1s0.nmconnection; \
 	fi
 	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)
 

@@ -213,12 +213,13 @@ $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE
 		$(PULL_SECRET_TEMPLATE) > $@/$(notdir $(PULL_SECRET_TEMPLATE))
 	cp $(NAMESPACE_TEMPLATE) $@/$(notdir $(NAMESPACE_TEMPLATE))
 
-site-config.iso: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
+site-config.iso: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		echo "Adding static network configuration to ISO"; \
 		mkdir $(CONFIG_DIR)/network-configuration
 		cp edge_configs/static_network.cfg $(CONFIG_DIR)/network-configuration/enp1s0.nmconnection; \
 	fi
+	cp -r edge_configs/extra-manifests $(CONFIG_DIR)
 	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso

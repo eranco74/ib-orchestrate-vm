@@ -1,0 +1,10 @@
+{
+  "apiVersion": "config.openshift.io/v1",
+  "kind": "ClusterVersion",
+  "metadata": {
+    "name": "version"
+  },
+  "spec": {
+    "clusterID": "40c3803f-ac79-4941-a3a4-22ca1b96eeee"
+  }
+}

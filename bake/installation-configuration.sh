@@ -31,7 +31,7 @@ do
 done
 
 DEVICE=$(lsblk -f --json | jq -r '.blockdevices[] | select(.label == "relocation-config") | .name')
-if [[ -n ${DEVICE+x} && ! -d "${RELOCATION_CONFIG_PATH}" ]]; then
+if [[ -n "${DEVICE}" && ! -d "${RELOCATION_CONFIG_PATH}" ]]; then
   mount_config "${DEVICE}"
   cp -r /mnt/config/* $(dirname ${RELOCATION_CONFIG_PATH})
 fi
@@ -249,6 +249,6 @@ echo "${KUBELET_SERVING_CERTIFICATE} is valid."
 rm -rf /opt/openshift
 systemctl enable kubelet
 systemctl disable installation-configuration.service
-if [[ -n ${DEVICE+x} ]]; then
+if [[ -n "${DEVICE}" ]]; then
   umount_config "${DEVICE}"
 fi

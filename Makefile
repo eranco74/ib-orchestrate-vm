@@ -216,7 +216,7 @@ $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE
 create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		echo "Adding static network configuration to ISO"; \
-		mkdir $(CONFIG_DIR)/network-configuration
+		mkdir $(CONFIG_DIR)/network-configuration; \
 		cp edge_configs/static_network.cfg $(CONFIG_DIR)/network-configuration/enp1s0.nmconnection; \
 	fi
 	cp -r edge_configs/extra-manifests $(CONFIG_DIR)

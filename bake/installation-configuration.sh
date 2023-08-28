@@ -47,7 +47,7 @@ echo "${RELOCATION_CONFIG_PATH} has been created"
 # Replace this with a function that loads values from yaml file
 set +o allexport
 
-if [ ! -d "${NETWORK_CONFIG_PATH}" ]; then
+if [[ -d "${NETWORK_CONFIG_PATH}" ]]; then
   echo "Static network configuration exist"
   cp "${NETWORK_CONFIG_PATH}"/*.nmconnection /etc/NetworkManager/system-connections/ -f
   systemctl restart NetworkManager

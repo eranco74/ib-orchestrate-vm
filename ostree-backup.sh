@@ -19,7 +19,7 @@ if [[ -z "$backup_repo" ]]; then
     exit 1
 fi
 
-sudo crictl ps -o json| jq -r '.containers[] | .imageRef' > /var/tmp/containers.list
+crictl ps -o json| jq -r '.containers[] | .imageRef' > /var/tmp/containers.list
 
 log_it Stopping kubelet
 systemctl stop kubelet
@@ -30,26 +30,19 @@ while crictl ps -q | grep -q .; do sleep 1; done
 log_it Stopping crio
 systemctl stop crio
 
-log_it Cleaning /var
-# Clean journal
-journalctl --flush --rotate --vacuum-time=1s
-journalctl --user --flush --rotate --vacuum-time=1s
-rm -fr /var/log/pods/*
-for i in $(find /var/log -type f -name "*.log"); do > $i; done
-
 log_it Creating backup datadir
 mkdir /var/tmp/backup
 mv /var/tmp/containers.list /var/tmp/backup/containers.list
 tar czf /var/tmp/backup/var.tgz \
     --exclude='/var/tmp/*' \
     --exclude='/var/lib/log/*' \
+    --exclude='/var/log/*' \
     --exclude='/var/lib/containers/*' \
     --exclude='/var/lib/kubelet/pods/*' \
     --exclude='/var/lib/cni/bin/*' \
     --selinux \
     /var
 ostree admin config-diff | awk '{print "/etc/" $2}' | xargs tar czf /var/tmp/backup/etc.tgz --selinux
-rpm-ostree status > /var/tmp/backup/rpm-ostree.status
 rpm-ostree status -v --json > /var/tmp/backup/rpm-ostree.json
 cp /etc/machine-config-daemon/currentconfig /var/tmp/backup/mco-currentconfig.json
 ostree commit --branch $backup_tag /var/tmp/backup

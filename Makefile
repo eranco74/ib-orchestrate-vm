@@ -7,6 +7,8 @@ CONFIG_DIR = ./config-dir
 
 ########################
 
+default: help
+
 checkenv:
 ifndef PULL_SECRET
 	$(error PULL_SECRET must be defined)

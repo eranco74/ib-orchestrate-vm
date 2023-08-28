@@ -56,4 +56,4 @@ ostree cat $backup_tag /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 log_it Restoring /etc
 ostree cat $backup_tag /etc.tgz | tar xzC /ostree/deploy/$new_osname/deploy/$ostree_deploy --selinux
 
-log_it DONE. You can reboot into the restored system
+log_it "DONE. Be sure to attach the relocation site info to the host (either via ISO or make copy-config) and you can reboot the node"

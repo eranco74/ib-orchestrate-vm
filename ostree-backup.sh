@@ -8,6 +8,7 @@ backup_refspec=$backup_repo:$backup_tag
 base_refspec=$backup_repo:$base_tag
 parent_refspec=$backup_repo:$parent_tag
 my_dir=$(dirname $(readlink -f $0))
+export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 
 log_it(){
     echo $@ | tr [:print:] -
@@ -20,7 +21,9 @@ if [[ -z "$backup_repo" ]]; then
     exit 1
 fi
 
+log_it "Saving list of running containers and clusterversion"
 crictl ps -o json| jq -r '.containers[] | .imageRef' > /var/tmp/containers.list
+oc get clusterversion version -ojson > /var/tmp/backup/clusterversion.json
 
 log_it "Stopping kubelet"
 systemctl stop kubelet

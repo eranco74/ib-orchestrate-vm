@@ -70,7 +70,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition ostree-backup ostree-restore create-config copy-config
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition ostree-backup ostree-restore create-config copy-config ostree-shared-containers
 
 .SILENT: destroy-libvirt
 
@@ -249,6 +249,15 @@ update_script:
 vdu: ## Apply VDU profile to sno-test
 	KUBECONFIG=$(SNO_KUBECONFIG) \
 	$(IMAGE_BASED_DIR)/vdu-profile.sh
+
+ostree-shared-containers: ## Setup a shared /var/lib/containers directory (to be used on ostree dual setups)
+	$(oc) apply -f ostree-var-lib-containers-machineconfig.yaml
+	echo "Waiting for 98-var-lib-containers to be present in running rendered-master MachineConfig"; \
+	until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq 98-var-lib-containers; do \
+		echo -n .;\
+		sleep 30; \
+	done; echo
+	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
 
 external-container-partition: ## Configure sno-test to use external /var/lib/containers
 	VM_NAME=sno-test \

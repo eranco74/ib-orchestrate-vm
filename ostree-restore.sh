@@ -8,6 +8,8 @@ parent_tag=parent
 backup_refspec=$backup_repo:$backup_tag
 base_refspec=$backup_repo:$base_tag
 parent_refspec=$backup_repo:$parent_tag
+export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
+shared_containers_dir=/sysroot/containers
 my_dir=$(dirname $(readlink -f $0))
 
 log_it(){
@@ -57,5 +59,15 @@ ostree cat $backup_tag /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 
 log_it "Restoring /etc"
 ostree cat $backup_tag /etc.tgz | tar xzC /ostree/deploy/$new_osname/deploy/$ostree_deploy --selinux
+
+# If we have a shared container directory, precache all running images + images from ocp release
+if [[ -d "$shared_containers_dir" ]]; then
+    log_it "Precaching containers"
+    release_image=$(ostree cat $backup_tag /clusterversion.json | jq -r .status.desired.image)
+    (
+        oc adm release extract --from="$release_image" --file=image-references | jq -r .spec.tags[].from.name ;
+        ostree cat $backup_tag /containers.list
+    ) | sort -u | xargs -r -n1 crictl pull
+fi
 
 log_it "DONE. Be sure to attach the relocation site info to the host (either via ISO or make copy-config) and you can reboot the node"

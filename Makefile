@@ -106,7 +106,13 @@ bake: machineConfigs ## Add changes into image template
 	$(oc) apply -f ./machineConfigs/installation-configuration.yaml
 	$(oc) apply -f ./machineConfigs/dnsmasq.yaml
 	echo "Wait for mcp to update, the node will reboot in the process"
-	sleep 120
+	for mc in 50-master-dnsmasq-configuration 99-master-installation-configuration; do \
+		echo "Waiting for $$mc to be present in running rendered-master MachineConfig"; \
+		until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq $$mc; do \
+			echo -n .;\
+			sleep 30; \
+		done; echo; \
+	done
 	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
 	# TODO: add this once we have the bootstrap script
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
@@ -122,13 +128,13 @@ credentials/backup-secret.json:
 	echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
 ostree-backup: credentials/backup-secret.json ## Backup sno-test into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
-	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@sno-test:.
-	ssh $(SSH_FLAGS) core@sno-test sudo ./ostree-backup.sh $(BACKUP_REPO)
+	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@sno-test:/tmp
+	ssh $(SSH_FLAGS) core@sno-test sudo /tmp/ostree-backup.sh $(BACKUP_REPO)
 
 ostree-restore: credentials/backup-secret.json ## Restore SNO from ostree OCI			make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=recipient-sno
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
-	scp $(SSH_FLAGS) ostree-restore.sh credentials/*-secret.json core@$(HOST):.
-	ssh $(SSH_FLAGS) core@$(HOST) sudo ./ostree-restore.sh $(BACKUP_REPO)
+	scp $(SSH_FLAGS) ostree-restore.sh credentials/*-secret.json core@$(HOST):/tmp
+	ssh $(SSH_FLAGS) core@$(HOST) sudo /tmp/ostree-restore.sh $(BACKUP_REPO)
 
 machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 

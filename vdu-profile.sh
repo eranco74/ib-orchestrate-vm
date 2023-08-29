@@ -17,10 +17,11 @@ oc apply -f ./vdu/04-node-tuning.yaml
 
 # Wait for generated machineconfig to have performanceprofile and tuned baked in
 for mc in $machineconfigs; do
+  echo "Waiting for $mc to be present in running rendered-master MachineConfig"
   until oc get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq $mc; do
-    echo "Waiting for $mc to be present in running rendered-master MachineConfig"
-    sleep 15
-  done
+    echo -n .
+    sleep 30
+  done; echo
 done
 
 # Wait for generated machineconfig to be applied

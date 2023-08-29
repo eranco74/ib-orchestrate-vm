@@ -8,6 +8,7 @@ parent_tag=parent
 backup_refspec=$backup_repo:$backup_tag
 base_refspec=$backup_repo:$base_tag
 parent_refspec=$backup_repo:$parent_tag
+my_dir=$(dirname $(readlink -f $0))
 
 log_it(){
     echo $@ | tr [:print:] -
@@ -30,30 +31,31 @@ fi
 mount /sysroot -o remount,rw
 
 # Import OCIs
-log_it Importing backup OCI
-cp backup-secret.json /etc/ostree/auth.json
-ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$backup_refspec --write-ref $backup_tag
+log_it "Importing backup OCI"
+# Authentication is not working properly with unencapsulate
+# Will be fixed with https://github.com/ostreedev/ostree-rs-ext/pull/519
+REGISTRY_AUTH_FILE="$my_dir/backup-secret.json" ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$backup_refspec --write-ref $backup_tag
 
 # If there's a parent to that commit, import it
 if [[ "$(ostree cat $backup_tag /rpm-ostree.json | jq -r '.deployments[] | select(.booted == true)| has("base-checksum")')" == "true" ]]; then
-    log_it Parent commit found for base, importing OCI
-    ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$parent_refspec --write-ref $parent_tag
+    log_it "Parent commit found for base, importing OCI"
+    REGISTRY_AUTH_FILE="$my_dir/backup-secret.json" ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$parent_refspec --write-ref $parent_tag
 fi
 
-log_it Initializing and deploying new stateroot
+log_it "Initializing and deploying new stateroot"
 ostree admin os-init $new_osname
-ostree container image deploy --sysroot / --stateroot $new_osname $(build_kargs) --imgref ostree-unverified-registry:$base_refspec
+ostree container image deploy --sysroot / --stateroot $new_osname $(build_kargs) --authfile "$my_dir/backup-secret.json" --imgref ostree-unverified-registry:$base_refspec
 ostree_deploy=$(ostree admin status | awk /$new_osname/'{print $2}')
 
 # Workaround to fix deploy origin URL
-log_it Restoring original osImageURL to new stateroot origin
+log_it "Restoring original osImageURL to new stateroot origin"
 original_osimage=$(ostree cat backup /mco-currentconfig.json | jq -r .spec.osImageURL)
 sed -e "s%docker://.*%$original_osimage%g" -i /ostree/deploy/$new_osname/deploy/$ostree_deploy.origin
 
-log_it Restoring /var
+log_it "Restoring /var"
 ostree cat $backup_tag /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 
-log_it Restoring /etc
+log_it "Restoring /etc"
 ostree cat $backup_tag /etc.tgz | tar xzC /ostree/deploy/$new_osname/deploy/$ostree_deploy --selinux
 
 log_it "DONE. Be sure to attach the relocation site info to the host (either via ISO or make copy-config) and you can reboot the node"

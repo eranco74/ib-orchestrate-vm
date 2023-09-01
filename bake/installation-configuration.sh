@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euoE pipefail ## -E option will cause functions to inherit trap
+set -x ## Be more verbose
 
 echo "Reconfiguring single node OpenShift"
 

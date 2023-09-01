@@ -207,15 +207,15 @@ $(CONFIG_DIR):
 # Set the network name to static and call start-vm
 $(CONFIG_DIR)/cluster-configuration: PULL_SECRET_ENCODED=$(shell echo '$(PULL_SECRET)' | json_reformat | base64 -w 0)
 $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE) checkenv
-	mkdir $@
-	sed -e 's/REPLACE_DOMAIN/$(CLUSTER_NAME).$(BASE_DOMAIN)/' \
+	@mkdir $@
+	@sed -e 's/REPLACE_DOMAIN/$(CLUSTER_NAME).$(BASE_DOMAIN)/' \
 		-e 's/REPLACE_PULL_SECRET_ENCODED/"$(PULL_SECRET_ENCODED)"/' \
 		-e 's/REPLACE_MIRROR_URL/$(MIRROR_URL)/' \
 		-e 's/REPLACE_MIRROR_PORT/$(MIRROR_PORT)/' \
 		-e 's|REPLACE_SSH_KEY|"$(NEW_SSH_KEY)"|' \
 		-e 's|REPLACE_REGISTRY_CERT|"$(NEW_REGISTRY_CERT)"|' \
 		$(CLUSTER_RELOCATION_TEMPLATE) > $@/$(notdir $(CLUSTER_RELOCATION_TEMPLATE))
-	sed -e 's/REPLACE_PULL_SECRET_ENCODED/"$(PULL_SECRET_ENCODED)"/' \
+	@sed -e 's/REPLACE_PULL_SECRET_ENCODED/"$(PULL_SECRET_ENCODED)"/' \
 		$(PULL_SECRET_TEMPLATE) > $@/$(notdir $(PULL_SECRET_TEMPLATE))
 	cp $(NAMESPACE_TEMPLATE) $@/$(notdir $(NAMESPACE_TEMPLATE))
 

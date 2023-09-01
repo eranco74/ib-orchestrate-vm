@@ -22,7 +22,8 @@ if [[ -z "$backup_repo" ]]; then
 fi
 
 log_it "Saving list of running containers and clusterversion"
-crictl ps -o json| jq -r '.containers[] | .imageRef' > /var/tmp/containers.list
+mkdir /var/tmp/backup
+crictl ps -o json| jq -r '.containers[] | .imageRef' > /var/tmp/backup/containers.list
 oc get clusterversion version -ojson > /var/tmp/backup/clusterversion.json
 
 log_it "Stopping kubelet"
@@ -35,7 +36,6 @@ log_it "Stopping crio"
 systemctl stop crio
 
 log_it "Creating backup datadir"
-mkdir /var/tmp/backup
 mv /var/tmp/containers.list /var/tmp/backup/containers.list
 tar czf /var/tmp/backup/var.tgz \
     --exclude='/var/tmp/*' \

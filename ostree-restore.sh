@@ -54,11 +54,22 @@ log_it "Restoring original osImageURL to new stateroot origin"
 original_osimage=$(ostree cat backup /mco-currentconfig.json | jq -r .spec.osImageURL)
 sed -e "s%docker://.*%$original_osimage%g" -i /ostree/deploy/$new_osname/deploy/$ostree_deploy.origin
 
+
 log_it "Restoring /var"
 ostree cat $backup_tag /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 
 log_it "Restoring /etc"
 ostree cat $backup_tag /etc.tgz | tar xzC /ostree/deploy/$new_osname/deploy/$ostree_deploy --selinux
+
+log_it "Backing up certificates to be used by recert"
+certs_dir=/ostree/deploy/$new_osname/var/opt/openshift/certs
+mkdir -p $certs_dir
+oc extract -n openshift-config configmap/admin-kubeconfig-client-ca --keys=ca-bundle.crt --to=- > $certs_dir/admin-kubeconfig-client-ca.crt
+for key in {loadbalancer,localhost,service-network}-serving-signer; do
+    oc extract -n openshift-kube-apiserver-operator secret/$key --keys=tls.key --to=- > $certs_dir/$key.key
+done
+ingress_cn=$(oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.crt --to=- | openssl x509 -subject -noout -nameopt multiline | awk '/commonName/{print $3}')
+oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.key --to=- > "$certs_dir/ingresskey-$ingress_cn"
 
 # If we have a shared container directory, precache all running images + images from ocp release
 if [[ -d "$shared_containers_dir" ]]; then

@@ -62,16 +62,24 @@ function recert {
   RELEASE_IMAGE=quay.io/openshift-release-dev/ocp-release:4.13.5-x86_64
   ETCD_IMAGE="$(oc adm release extract --from="$RELEASE_IMAGE" --file=image-references | jq '.spec.tags[] | select(.name == "etcd").from.name' -r)"
   RECERT_IMAGE="quay.io/otuchfel/recert:latest"
+  local recert_cmd="sudo podman run -it --network=host --privileged -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon"
+  local certs_dir=/var/opt/openshift/certs
   sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store
   sleep 10 # TODO: wait for etcd
-  sudo podman run -it --network=host --privileged -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} \
-      --etcd-endpoint localhost:2379 \
-      --static-dir /kubernetes \
-      --static-dir /kubelet \
-      --static-dir /machine-config-daemon \
-
+  # Use previous cluster certs if directory is present
+  if [[ -d $certs_dir ]]; then
+    ingress_key=$(readlink -f $certs_dir/ingresskey-*)
+    ingress_cn=$(basename $ingress_key | cut -d - -f 2-)
+    $recert_cmd \
+      --use-cert $certs_dir/admin-kubeconfig-client-ca.crt \
+      --use-key "kube-apiserver-lb-signer $certs_dir/loadbalancer-serving-signer.key" \
+      --use-key "kube-apiserver-localhost-signer $certs_dir/localhost-serving-signer.key" \
+      --use-key "kube-apiserver-service-network-signer $certs_dir/service-network-serving-signer.key" \
+      --use-key "$ingress_cn $ingress_key"
+  else
+    $recert_cmd
+  fi
   sudo podman kill recert_etcd
-
 }
 
 sleep 30 # TODO: wait for weird network DHCP/DNS issue to resolve

@@ -18,9 +18,10 @@ LIBVIRT_IMAGE_PATH := $(or ${LIBVIRT_IMAGE_PATH},/var/lib/libvirt/images)
 BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/sno-test.qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
-CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/05_cluster-relocation.json
-PULL_SECRET_TEMPLATE = ./edge_configs/03_pullsecret.json
-NAMESPACE_TEMPLATE = ./edge_configs/00_namespace.json
+CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/cluster-configuration/05_cluster-relocation.json
+PULL_SECRET_TEMPLATE = ./edge_configs/cluster-configuration/03_pullsecret.json
+NAMESPACE_TEMPLATE = ./edge_configs/cluster-configuration/00_namespace.json
+EXTRA_MANIFESTS_PATH = ./edge_configs/extra-manifests
 MACHINE_NETWORK ?= 192.168.127.0/24
 CPU_CORE ?= 16
 RAM_MB ?= 32768
@@ -207,7 +208,6 @@ $(CONFIG_DIR):
 # Set the network name to static and call start-vm
 $(CONFIG_DIR)/cluster-configuration: PULL_SECRET_ENCODED=$(shell echo '$(PULL_SECRET)' | json_reformat | base64 -w 0)
 $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE) checkenv
-	mkdir $@
 	sed -e 's/REPLACE_DOMAIN/$(CLUSTER_NAME).$(BASE_DOMAIN)/' \
 		-e 's/REPLACE_PULL_SECRET_ENCODED/"$(PULL_SECRET_ENCODED)"/' \
 		-e 's/REPLACE_MIRROR_URL/$(MIRROR_URL)/' \
@@ -225,7 +225,7 @@ create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.c
 		mkdir $(CONFIG_DIR)/network-configuration; \
 		cp edge_configs/static_network.cfg $(CONFIG_DIR)/network-configuration/enp1s0.nmconnection; \
 	fi
-	cp -r edge_configs/extra-manifests $(CONFIG_DIR)
+	cp -r $(EXTRA_MANIFESTS_PATH) $(CONFIG_DIR)
 
 site-config.iso: create-config ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)

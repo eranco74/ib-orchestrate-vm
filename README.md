@@ -104,6 +104,22 @@ To keep the configuration for using an external partition /var/lib/containers, w
 make remove-container-partition
 ```
 
+### Use shared directorty for /var/lib/containers (to be used with ostree restore)
+A shared directory `/sysroot/containers` can be used to mount and share /var/lib/containers when using ostree based dual boot
+Before baking, run:
+```bash
+make ostree-shared-containers
+```
+
+This will create a `/sysroot/containers` in the system used to create the golden image, and when the golden image is restored into other cluster, it will boot using the shared /var/lib/containers directory
+
+If the system where we want to relocate the golden image has this setup already in place, both systems will share the same directory for containers storage, and we can use it to precache images.
+
+The use case for this is to easily precache all the images that Cluster B will use, while Cluster A is still running (see the "Precaching section" in the [ostree-restore.sh](https://github.com/eranco74/sno-relocation-poc/blob/master/ostree-restore.sh) script)
+
+#### WARNING
+It is important to note that this will only configure the golden image, but in order for the original system to also use that shared directory, the `ostree-var-lib-containers-machineconfig.yaml` manifest needs to be applied to the running SNO cluster A before relocation (and it will reboot the node). If not, nothing will break, but since that system will have its own /var/lib/containers directory, precaching cannot be done
+
 ## Examples
 ### Full run with vDU profile and ostree
 #### Prerequisites
@@ -117,7 +133,7 @@ export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
 #### Creation of relocatable image
 - Create new VM, apply the vDU profile, the relocation needed things, and create an ostree backup:
 ```
-make start-iso-abi wait-for-install-complete vdu bake ostree-backup stop-baked-vm BACKUP_REPO=$BACKUP_REPO
+make start-iso-abi wait-for-install-complete vdu ostree-shared-containers bake ostree-backup stop-baked-vm BACKUP_REPO=$BACKUP_REPO
 ```
 #### Installing the backup into a running SNO
 - Copy the ssh key:

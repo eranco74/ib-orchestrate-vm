@@ -27,6 +27,15 @@ build_kargs(){
         | xargs --no-run-if-empty -I% echo -n "--karg % "
 }
 
+podman_unencapsulate(){
+  local image=$1
+  local ref=$2
+  local credentials=$3
+  podman pull --authfile $credentials $image
+  ostree container unencapsulate --repo /ostree/repo ostree-unverified-image:containers-storage:$image --write-ref $ref
+  podman rmi $image
+}
+
 if [[ -z "$backup_repo" ]]; then
     echo "ERROR. Backup repo is empty"
     exit 1
@@ -38,12 +47,15 @@ mount /sysroot -o remount,rw
 log_it "Importing backup OCI"
 # Authentication is not working properly with unencapsulate
 # Will be fixed with https://github.com/ostreedev/ostree-rs-ext/pull/519
-REGISTRY_AUTH_FILE="$my_dir/backup-secret.json" ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$backup_refspec --write-ref $backup_tag
+# Until now, we will pull with podman and unencapsulate from local registry
+# ostree container unencapsulate --authfile "$my_dir/backup-secret.json" --repo /ostree/repo ostree-unverified-registry:$backup_refspec --write-ref $backup_tag
+podman_unencapsulate $backup_refspec $backup_tag "$my_dir/backup-secret.json"
 
 # If there's a parent to that commit, import it
 if [[ "$(ostree cat $backup_tag /rpm-ostree.json | jq -r '.deployments[] | select(.booted == true)| has("base-checksum")')" == "true" ]]; then
     log_it "Parent commit found for base, importing OCI"
-    REGISTRY_AUTH_FILE="$my_dir/backup-secret.json" ostree container unencapsulate --repo /ostree/repo ostree-unverified-registry:$parent_refspec --write-ref $parent_tag
+    # ostree container unencapsulate --authfile "$my_dir/backup-secret.json" --repo /ostree/repo ostree-unverified-registry:$parent_refspec --write-ref $parent_tag
+    podman_unencapsulate $parent_refspec $parent_tag "$my_dir/backup-secret.json"
 fi
 
 log_it "Initializing and deploying new stateroot"

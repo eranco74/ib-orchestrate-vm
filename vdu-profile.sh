@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e # Halt on error
+
 KUBECONFIG=${KUBECONFIG:-./bootstrap-in-place-poc/sno-workdir/auth/kubeconfig}
 export KUBECONFIG
 machineconfigs="50-performance-openshift-node-performance-profile 99-master-generated-kubelet"

@@ -142,7 +142,7 @@ ssh-copy-id -i bootstrap-in-place-poc/ssh-key/key.pub core@$RECIPIENT_HOST
 ```
 - Restore the backup and copy site-config:
 ```
-make ostree-restore copy-config BACKUP_REPO=$BACKUP_REPO HOST=$RECIPIENT_HOST CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
+make ostree-restore copy-config BACKUP_REPO=$BACKUP_REPO HOST=$RECIPIENT_HOST CLUSTER_NAME=new-name BASE_DOMAIN=foo.com SNOB_KUBECONFIG=path_to/recipient-kubeconfig
 ```
 - Reboot the recipient host
 - After host boots and finishes initialization process, copy new kubeconfig:

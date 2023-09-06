@@ -219,7 +219,11 @@ $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE
 		$(PULL_SECRET_TEMPLATE) > $@/$(notdir $(PULL_SECRET_TEMPLATE))
 	cp $(NAMESPACE_TEMPLATE) $@/$(notdir $(NAMESPACE_TEMPLATE))
 
-create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests
+$(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json: $(CONFIG_DIR)/cluster-configuration
+	KUBECONFIG=$(SNOB_KUBECONFIG) \
+	$(IMAGE_BASED_DIR)/create-cert-for-api-lb.sh api.$(CLUSTER_NAME).$(BASE_DOMAIN) > $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json
+
+create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
 		echo "Adding static network configuration to ISO"; \
 		mkdir $(CONFIG_DIR)/network-configuration; \
@@ -230,7 +234,7 @@ create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.c
 site-config.iso: create-config ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)
 
-copy-config: create-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=recipient-sno
+copy-config: create-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=recipient-sno SNOB_KUBECONFIG=path_to_recipient_kubeconfig
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
 	echo "Copying site-config to $(HOST)"
 	ssh $(SSH_FLAGS) core@$(HOST) sudo mkdir -p /sysroot/ostree/deploy/ingrade/var/opt/openshift

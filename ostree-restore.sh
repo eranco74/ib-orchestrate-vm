@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e # Halt on error
+
 new_osname=ingrade
 backup_repo=${1:-$BACKUP_REPO}
 backup_tag=backup

@@ -26,6 +26,10 @@
         "source": "registry.redhat.io/multicluster-engine"
       }
     ],
+    "apiCertRef": {
+      "name": "new-api-certs",
+      "namespace": "relocation"
+    },
     "pullSecretRef": {
       "name": "new-pull-secret",
       "namespace": "relocation"

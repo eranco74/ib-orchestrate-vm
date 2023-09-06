@@ -63,7 +63,7 @@ function recert {
   ETCD_IMAGE="$(oc adm release extract --from="$RELEASE_IMAGE" --file=image-references | jq '.spec.tags[] | select(.name == "etcd").from.name' -r)"
   RECERT_IMAGE="quay.io/otuchfel/recert:latest"
   local certs_dir=/var/opt/openshift/certs
-  local recert_cmd="sudo podman run -it --network=host --privileged -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --extend-expiration"
+  local recert_cmd="sudo podman run --name recert --network=host --privileged -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --extend-expiration"
   sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store
   sleep 10 # TODO: wait for etcd
   # Use previous cluster certs if directory is present
@@ -79,11 +79,19 @@ function recert {
   else
     $recert_cmd
   fi
+  # TODO: uncomment this once recert is stable
+  # sudo podman rm recert
   sudo podman kill recert_etcd
 }
 
-sleep 30 # TODO: wait for weird network DHCP/DNS issue to resolve
-recert
+if [ ! -f recert.done ]
+then
+  sleep 30 # TODO: wait for weird network DHCP/DNS issue to resolve
+  echo "Regenerate cryptographic keys "
+  recert
+  touch recert.done
+fi
+
 
 # TODO check if we really need to stop kubelet
 echo "Starting kubelet"

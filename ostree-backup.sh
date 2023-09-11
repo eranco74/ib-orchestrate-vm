@@ -38,7 +38,6 @@ log_it "Stopping crio"
 systemctl stop crio
 
 log_it "Creating backup datadir"
-mv /var/tmp/containers.list /var/tmp/backup/containers.list
 tar czf /var/tmp/backup/var.tgz \
     --exclude='/var/tmp/*' \
     --exclude='/var/lib/log/*' \

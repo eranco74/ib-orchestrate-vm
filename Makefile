@@ -222,20 +222,37 @@ $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE
 
 $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json: $(CONFIG_DIR)/cluster-configuration
 	KUBECONFIG=$(SNOB_KUBECONFIG) \
-	$(IMAGE_BASED_DIR)/create-cert-for-api-lb.sh api.$(CLUSTER_NAME).$(BASE_DOMAIN) > $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json
+	$(IMAGE_BASED_DIR)/create-cert-for-api-lb.sh api.$(CLUSTER_NAME).$(BASE_DOMAIN) > $@
 
-create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json
+$(CONFIG_DIR)/extra-manifests:
+	rm -rf $@
+	mkdir -p $@
+
+$(CONFIG_DIR)/extra-manifests/cluster_id_override.json: $(CONFIG_DIR)/extra-manifests
+	KUBECONFIG=$(SNOB_KUBECONFIG) \
+	CLUSTER_ID=$(oc get clusterversion version -o jsonpath='{.spec.clusterID}')
+	sed -d "s/CLUSTER_ID_TEMPLATE/$CLUSTER_ID/g" $(EXTRA_MANIFESTS_PATH)/cluster_id_override.json > $@
+
+create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \
-		echo "Adding static network configuration to ISO"; \
+		echo "Adding static network configuration to config dir"; \
 		mkdir $(CONFIG_DIR)/network-configuration; \
 		cp edge_configs/static_network.cfg $(CONFIG_DIR)/network-configuration/enp1s0.nmconnection; \
 	fi
-	cp -r $(EXTRA_MANIFESTS_PATH) $(CONFIG_DIR)
+	@if [ ls $(EXTRA_MANIFESTS_PATH)/*.json ]; then \
+		echo "Adding extra manifests to config dir"; \
+		mkdir $(CONFIG_DIR)/extra-manifests; \
+		cp $(EXTRA_MANIFESTS_PATH)/*.json $(CONFIG_DIR)/network-configuration/enp1s0.nmconnection; \
+	fi
+
+	cp -r $(EXTRA_MANIFESTS_PATH)/*.json $(CONFIG_DIR)
+
+create-upgrade-config: $(CONFIG_DIR)/extra-manifests/cluster_id_override.json $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json create-config
 
 site-config.iso: create-config ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)
 
-copy-config: create-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=recipient-sno SNOB_KUBECONFIG=path_to_recipient_kubeconfig
+copy-config: create-upgrade-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=recipient-sno SNOB_KUBECONFIG=path_to_recipient_kubeconfig
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
 	echo "Copying site-config to $(HOST)"
 	ssh $(SSH_FLAGS) core@$(HOST) sudo mkdir -p /sysroot/ostree/deploy/ingrade/var/opt/openshift

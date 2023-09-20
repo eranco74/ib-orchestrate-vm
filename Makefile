@@ -123,6 +123,7 @@ stop-baked-vm: ## Shutdown and undefine sno-test
 	make wait-for-shutdown
 	sudo virsh undefine sno-test
 
+.PHONY: credentials/backup-secret.json
 credentials/backup-secret.json:
 	@test '$(BACKUP_SECRET)' || { echo "BACKUP_SECRET must be defined"; exit 1; }
 	mkdir -p credentials

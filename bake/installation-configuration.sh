@@ -61,7 +61,7 @@ fi
 function recert {
   RELEASE_IMAGE=quay.io/openshift-release-dev/ocp-release:4.13.5-x86_64
   ETCD_IMAGE="$(oc adm release extract --from="$RELEASE_IMAGE" --file=image-references | jq '.spec.tags[] | select(.name == "etcd").from.name' -r)"
-  RECERT_IMAGE="quay.io/recert/recert:latest"
+  RECERT_IMAGE="quay.io/edge-infrastructure/recert:latest"
   local certs_dir=/var/opt/openshift/certs
   local recert_cmd="sudo podman run --name recert --network=host --privileged -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --extend-expiration"
   sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store

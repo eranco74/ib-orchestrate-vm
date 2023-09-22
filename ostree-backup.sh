@@ -26,7 +26,7 @@ fi
 log_it "Saving list of running containers and clusterversion"
 if [[ ! -f /tmp/container_list.done ]]; then
     mkdir -p /var/tmp/backup
-    crictl ps -o json| jq -r '.containers[] | .imageRef' > /var/tmp/backup/containers.list
+    crictl images -o json | jq -r '.images[] | .repoDigests[], .repoTags[]' > /var/tmp/backup/containers.list
     oc get clusterversion version -ojson > /var/tmp/backup/clusterversion.json
     touch /tmp/container_list.done
 else

@@ -37,7 +37,7 @@ make vdu
 make bake
 ```
 
-This will apply machine configs to the SNO instance (named sno-test).
+This will apply machine configs to the SNO instance (named sno1).
 
 - (OPTIONAL) With the cluster ready we can create an ostree backup to be imported in an existing SNO
 To do so, the credentials for writing in $BACKUP_REPO must be in an environment variable called `BACKUP_SECRET`, and then run:
@@ -52,7 +52,7 @@ This will backup /var and /etc changes in an OCI container.
 make stop-baked-vm
 ```
 
-This will shutdown the VM and remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno-test.qcow2.
+This will shutdown the VM and remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno1.qcow2.
 
 - Create the site-config iso wiht the configuration for the SNO instance at edge site:
 ```bash

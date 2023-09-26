@@ -74,6 +74,22 @@ make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 
 ## Extra goodies
 
+### Backup and reuse pre-baked image
+At any point prior to the `make bake`, we can backup the VM used to generate the golden image, this allows for faster iteration and testing
+
+To create a backup, before baking, run
+```bash
+make backup-prebaked-image
+```
+
+To restore that image, just run
+```bash
+make restore-prebaked-image
+```
+
+IMPORTANT: Remember that certificates expire, so if a backed up image is old, certificates will expire and openshift wont be usable
+TODO: Apply recert after restoring the image
+
 ### Restore OSTree relocation image into existing SNO
 #### Prerequisites
 - A image must be created before with `make ostree-backup` (see above)

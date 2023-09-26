@@ -37,7 +37,7 @@ make vdu
 make bake
 ```
 
-This will apply machine configs to the SNO instance (named sno-test).
+This will apply machine configs to the SNO instance (named sno1).
 
 - (OPTIONAL) With the cluster ready we can create an ostree backup to be imported in an existing SNO
 To do so, the credentials for writing in $BACKUP_REPO must be in an environment variable called `BACKUP_SECRET`, and then run:
@@ -52,7 +52,7 @@ This will backup /var and /etc changes in an OCI container.
 make stop-baked-vm
 ```
 
-This will shutdown the VM and remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno-test.qcow2.
+This will shutdown the VM and remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno1.qcow2.
 
 - Create the site-config iso wiht the configuration for the SNO instance at edge site:
 ```bash
@@ -73,6 +73,22 @@ make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 - You can now monitor the progress using `make ssh` and `journalctl -f -u installation-configuration.service`
 
 ## Extra goodies
+
+### Backup and reuse pre-baked image
+At any point prior to the `make bake`, we can backup the VM used to generate the golden image, this allows for faster iteration and testing
+
+To create a backup, before baking, run
+```bash
+make backup-prebaked-image
+```
+
+To restore that image, just run
+```bash
+make restore-prebaked-image
+```
+
+IMPORTANT: Remember that certificates expire, so if a backed up image is old, certificates will expire and openshift wont be usable
+TODO: Apply recert after restoring the image
 
 ### Restore OSTree relocation image into existing SNO
 #### Prerequisites

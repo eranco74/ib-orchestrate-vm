@@ -14,8 +14,10 @@ ifndef PULL_SECRET
 	$(error PULL_SECRET must be defined)
 endif
 
+MODEL_VM_NAME  := sno1
 LIBVIRT_IMAGE_PATH := $(or ${LIBVIRT_IMAGE_PATH},/var/lib/libvirt/images)
-BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/sno-test.qcow2
+BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(MODEL_VM_NAME).qcow2
+BACKUP_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(MODEL_VM_NAME).qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
 CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/cluster-configuration/05_cluster-relocation.json
@@ -31,7 +33,7 @@ NET_CONFIG = $(IMAGE_BASED_DIR)/net.xml
 
 
 NET_NAME = test-net-2
-VM_NAME = sno-test-2
+VM_NAME = sno2
 VOL_NAME = $(VM_NAME).qcow2
 
 SSH_KEY_DIR = $(SNO_DIR)/ssh-key
@@ -100,6 +102,18 @@ wait-for-install-complete: ## Wait for start-iso-abi to complete
 			sleep 10; \
 	done
 
+backup-prebaked-image: ## Make a copy of a pre-baked model VM disk image to be reused
+	virsh shutdown $(MODEL_VM_NAME)
+	until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	cp "$(BASE_IMAGE_PATH_SNO)" "$(BACKUP_IMAGE_PATH_SNO)"
+	virsh start $(MODEL_VM_NAME)
+
+restore-prebaked-image: ## Restore a copy of a pre-baked model VM disk image
+	virsh destroy $(MODEL_VM_NAME)
+	until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	cp "$(BACKUP_IMAGE_PATH_SNO)" "$(BASE_IMAGE_PATH_SNO)"
+	virsh start $(MODEL_VM_NAME)
+
 ### Bake the image template
 
 bake: machineConfigs ## Add changes into image template
@@ -117,11 +131,14 @@ bake: machineConfigs ## Add changes into image template
 	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
 	# TODO: add this once we have the bootstrap script
 	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
+	# Uncomment below line to generate an image that you can modify the script of and manually run
+	# instead of having it run automatically on boot. Useful for development.
+	# make -C $(SNO_DIR) ssh CMD="sudo systemctl disable installation-configuration"
 
-stop-baked-vm: ## Shutdown and undefine sno-test
-	sudo virsh shutdown sno-test
+stop-baked-vm: ## Shutdown and undefine model VM
+	sudo virsh shutdown $(MODEL_VM_NAME)
 	make wait-for-shutdown
-	sudo virsh undefine sno-test
+	sudo virsh undefine $(MODEL_VM_NAME)
 
 .PHONY: credentials/backup-secret.json
 credentials/backup-secret.json:
@@ -129,11 +146,11 @@ credentials/backup-secret.json:
 	mkdir -p credentials
 	echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
-ostree-backup: credentials/backup-secret.json ## Backup sno-test into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
-	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@sno-test:/tmp
-	ssh $(SSH_FLAGS) core@sno-test sudo /tmp/ostree-backup.sh $(BACKUP_REPO)
+ostree-backup: credentials/backup-secret.json ## Backup model VM into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
+	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
+	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo /tmp/ostree-backup.sh $(BACKUP_REPO)
 
-ostree-restore: credentials/backup-secret.json ## Restore SNO from ostree OCI			make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=recipient-sno
+ostree-restore: credentials/backup-secret.json ## Restore SNO from ostree OCI			make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=snob-sno
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
 	scp $(SSH_FLAGS) ostree-restore.sh credentials/*-secret.json core@$(HOST):/tmp
 	ssh $(SSH_FLAGS) core@$(HOST) sudo /tmp/ostree-restore.sh $(BACKUP_REPO)
@@ -152,8 +169,8 @@ machineConfigs/internal-ip.yaml: bake/dispatcher-pre-up-internal-ip.sh bake/crio
 
 
 wait-for-shutdown:
-	until sudo virsh domstate sno-test | grep shut; do \
-  		echo " sno-test still running"; \
+	until sudo virsh domstate $(MODEL_VM_NAME) | grep shut; do \
+  		echo " $(MODEL_VM_NAME) still running"; \
   		sleep 10; \
     done
 
@@ -236,11 +253,11 @@ create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.c
 site-config.iso: create-config ## Create site-config.iso				make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 	mkisofs -o site-config.iso -R -V "relocation-config" $(CONFIG_DIR)
 
-copy-config: create-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=recipient-sno SNOB_KUBECONFIG=path_to_recipient_kubeconfig
+copy-config: create-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=snob-sno SNOB_KUBECONFIG=snob_kubeconfig
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
 	echo "Copying site-config to $(HOST)"
-	ssh $(SSH_FLAGS) core@$(HOST) sudo mkdir -p /sysroot/ostree/deploy/ingrade/var/opt/openshift
-	tar czC $(CONFIG_DIR) . | ssh $(SSH_FLAGS) core@$(HOST) sudo tar xvzC /sysroot/ostree/deploy/ingrade/var/opt/openshift --no-same-owner
+	ssh $(SSH_FLAGS) core@$(HOST) sudo mkdir -p /sysroot/ostree/deploy/ibu/var/opt/openshift
+	tar czC $(CONFIG_DIR) . | ssh $(SSH_FLAGS) core@$(HOST) sudo tar xvzC /sysroot/ostree/deploy/ibu/var/opt/openshift --no-same-owner
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 	sudo cp site-config.iso $(LIBVIRT_IMAGE_PATH)
@@ -252,7 +269,7 @@ update_script:
 	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl daemon-reload"
 	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl restart installation-configuration.service --no-block"
 
-vdu: ## Apply VDU profile to sno-test
+vdu: ## Apply VDU profile to model VM
 	KUBECONFIG=$(SNO_KUBECONFIG) \
 	$(IMAGE_BASED_DIR)/vdu-profile.sh
 
@@ -265,8 +282,8 @@ ostree-shared-containers: ## Setup a shared /var/lib/containers directory (to be
 	done; echo
 	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
 
-external-container-partition: ## Configure sno-test to use external /var/lib/containers
-	VM_NAME=sno-test \
+external-container-partition: ## Configure model VM to use external /var/lib/containers
+	VM_NAME=$(MODEL_VM_NAME) \
 	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
 	KUBECONFIG=$(SNO_KUBECONFIG) \
 	$(IMAGE_BASED_DIR)/external-varlibcontainers-create.sh

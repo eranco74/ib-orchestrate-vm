@@ -2,7 +2,7 @@
 
 KUBECONFIG=${KUBECONFIG:-./bootstrap-in-place-poc/sno-workdir/auth/kubeconfig}
 export KUBECONFIG
-VM_NAME=${VM_NAME:-sno-test}
+VM_NAME=${VM_NAME:-sno1}
 BASE_IMAGE_PATH_SNO=${BASE_IMAGE_PATH_SNO:-/var/lib/libvirt/images/${VM_NAME}.qcow2}
 
 virsh shutdown ${VM_NAME}

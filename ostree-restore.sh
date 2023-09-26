@@ -2,7 +2,7 @@
 
 set -e # Halt on error
 
-new_osname=ingrade
+new_osname=ibu
 backup_repo=${1:-$BACKUP_REPO}
 backup_tag=backup
 base_tag=base
@@ -31,9 +31,13 @@ podman_unencapsulate(){
   local image=$1
   local ref=$2
   local credentials=$3
-  podman pull --authfile $credentials $image
-  ostree container unencapsulate --repo /ostree/repo ostree-unverified-image:containers-storage:$image --write-ref $ref
-  podman rmi $image
+  if ! ostree rev-parse $ref >/dev/null 2>/dev/null; then
+      podman pull --authfile $credentials $image
+      ostree container unencapsulate --repo /ostree/repo ostree-unverified-image:containers-storage:$image --write-ref $ref
+      podman rmi $image
+  else
+      echo "Ref $ref already exists, skipping unencapsulate"
+  fi
 }
 
 if [[ -z "$backup_repo" ]]; then
@@ -59,7 +63,11 @@ if [[ "$(ostree cat $backup_tag /rpm-ostree.json | jq -r '.deployments[] | selec
 fi
 
 log_it "Initializing and deploying new stateroot"
-ostree admin os-init $new_osname
+if rpm-ostree status -v --json | jq -e '[.deployments[] | select(.osname == "ibu")] | length == 0' > /dev/null; then
+    ostree admin os-init $new_osname
+else
+    echo "Deployment already exists, skipping os-init"
+fi
 ostree container image deploy --sysroot / --stateroot $new_osname $(build_kargs) --authfile "$my_dir/backup-secret.json" --imgref ostree-unverified-registry:$base_refspec
 ostree_deploy=$(ostree admin status | awk /$new_osname/'{print $2}')
 
@@ -74,6 +82,11 @@ ostree cat $backup_tag /var.tgz | tar xzC /ostree/deploy/$new_osname --selinux
 
 log_it "Restoring /etc"
 ostree cat $backup_tag /etc.tgz | tar xzC /ostree/deploy/$new_osname/deploy/$ostree_deploy --selinux
+
+log_it "Waiting for API"
+until oc get clusterversion 2>/dev/null >/dev/null; do
+    sleep 5
+done
 
 log_it "Backing up certificates to be used by recert"
 certs_dir=/ostree/deploy/$new_osname/var/opt/openshift/certs

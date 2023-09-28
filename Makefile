@@ -18,7 +18,6 @@ LIBVIRT_IMAGE_PATH := $(or ${LIBVIRT_IMAGE_PATH},/var/lib/libvirt/images)
 BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/sno-test.qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
-CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/cluster-configuration/05_cluster-relocation.json
 PULL_SECRET_TEMPLATE = ./edge_configs/cluster-configuration/03_pullsecret.json
 NAMESPACE_TEMPLATE = ./edge_configs/cluster-configuration/00_namespace.json
 EXTRA_MANIFESTS_PATH = ./edge_configs/extra-manifests
@@ -208,7 +207,7 @@ $(CONFIG_DIR):
 
 # Set the network name to static and call start-vm
 $(CONFIG_DIR)/cluster-configuration: PULL_SECRET_ENCODED=$(shell echo '$(PULL_SECRET)' | json_reformat | base64 -w 0)
-$(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE) checkenv
+$(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) checkenv
 	@mkdir $@
 	@sed -e 's/REPLACE_DOMAIN/$(CLUSTER_NAME).$(BASE_DOMAIN)/' \
 		-e 's/REPLACE_PULL_SECRET_ENCODED/"$(PULL_SECRET_ENCODED)"/' \
@@ -220,10 +219,6 @@ $(CONFIG_DIR)/cluster-configuration: $(CONFIG_DIR) $(CLUSTER_RELOCATION_TEMPLATE
 	@sed -e 's/REPLACE_PULL_SECRET_ENCODED/"$(PULL_SECRET_ENCODED)"/' \
 		$(PULL_SECRET_TEMPLATE) > $@/$(notdir $(PULL_SECRET_TEMPLATE))
 	cp $(NAMESPACE_TEMPLATE) $@/$(notdir $(NAMESPACE_TEMPLATE))
-
-$(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json: $(CONFIG_DIR)/cluster-configuration
-	KUBECONFIG=$(SNOB_KUBECONFIG) \
-	$(IMAGE_BASED_DIR)/create-cert-for-api-lb.sh api.$(CLUSTER_NAME).$(BASE_DOMAIN) > $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json
 
 create-config: $(CONFIG_DIR)/cluster-configuration edge_configs/static_network.cfg edge_configs/extra-manifests $(CONFIG_DIR)/cluster-configuration/03_lb-api-cert-secret.json
 	@if [ "$(STATIC_NETWORK)" = "TRUE" ]; then \

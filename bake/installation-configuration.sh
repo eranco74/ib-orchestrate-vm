@@ -63,7 +63,25 @@ function recert {
   ETCD_IMAGE="$(oc adm release extract --from="$RELEASE_IMAGE" --file=image-references | jq '.spec.tags[] | select(.name == "etcd").from.name' -r)"
   RECERT_IMAGE="quay.io/edge-infrastructure/recert:latest"
   local certs_dir=/var/opt/openshift/certs
-  local recert_cmd="sudo podman run --name recert --network=host --privileged -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --extend-expiration"
+  local recert_cmd="sudo podman run \
+          --name recert \
+          --network=host \
+          --privileged \
+          -v /var/opt/openshift:/var/opt/openshift \
+          -v /etc/kubernetes:/kubernetes \
+          -v /var/lib/kubelet:/kubelet \
+          -v /etc:/host-etc \
+          ${RECERT_IMAGE} \
+          --etcd-endpoint localhost:2379 \
+          --static-dir /kubernetes \
+          --static-dir /kubelet \
+          --static-dir /host-etc/machine-config-daemon \
+          --static-file /host-etc/mcs-machine-config-content.json \
+          --cn-san-replace api-int.test-cluster.redhat.com:api-int.new-name.foo.com \
+          --cn-san-replace api.test-cluster.redhat.com:api.new-name.foo.com \
+          --cn-san-replace *.apps.test-cluster.redhat.com:*.apps.new-name.foo.com \
+          --cluster-rename new-name,foo.com \
+          --extend-expiration"
   sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store
   sleep 10 # TODO: wait for etcd
   # Use previous cluster certs if directory is present
@@ -110,80 +128,6 @@ function wait_for_api {
 }
 
 wait_for_api
-
-wait_approve_csr() {
-  local name=${1}
-
-  echo "Waiting for ${name} CSR..."
-  until oc get csr | grep -i "${name}" | grep -i "pending" &> /dev/null
-  do
-    echo "Waiting for ${name} CSR..."
-    sleep 5
-  done
-  echo "CSR ${name} is ready for approval"
-
-  echo "Approving all pending CSRs..."
-  oc get csr -o go-template='{{range .items}}{{if not .status}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | xargs oc adm certificate approve
-}
-
-# if hostname has changed
-if [[ "$(oc get nodes -ojsonpath='{.items[0].metadata.name}')" != "$(hostname)" ]]
-then
-  wait_approve_csr "kube-apiserver-client-kubelet"
-  wait_approve_csr "kubelet-serving"
-
-  echo "Deleting previous node..."
-  oc delete node "$(oc get nodes -ojsonpath='{.items[?(@.metadata.name != "'"$(hostname)"'"].metadata.name}')"
-fi
-
-verify_csr_subject() {
-  local csr=${1}
-  local subject
-
-  subject="$(oc get csr -ojsonpath='{.spec.request}' "${csr}" |base64 -d | openssl req -noout -subject -nameopt multiline)"
-
-  if [ "$(echo "${subject}" |grep commonName |awk '{print $3}')" != "system:node:$(hostname)" ]
-  then
-    echo "CommonName is not 'system:node:master1'"
-    return
-  fi
-
-  if [ "$(echo "${subject}" |grep organizationName |awk '{print $3}')" != "system:nodes" ]
-  then
-    echo "Organization is not 'system:nodes'"
-    return
-  fi
-}
-
-# If the kubelet API server client certificate has expired:
-#   1. wait for the respective CSR to be created
-#   2. verify it
-#   3. approve it
-#   4. wait for the certificate to be issued
-KUBELET_CLIENT_CERTIFICATE=/var/lib/kubelet/pki/kubelet-client-current.pem
-until openssl x509 -in ${KUBELET_CLIENT_CERTIFICATE} -checkend 30 &> /dev/null
-do
-  echo "${KUBELET_CLIENT_CERTIFICATE} has expired, waiting for new one to be issued..."
-
-  csr=$(oc get csr -o go-template='{{range .items}}{{if and (not .status) (eq .spec.signerName "kubernetes.io/kube-apiserver-client-kubelet") (eq .spec.username "system:serviceaccount:openshift-machine-config-operator:node-bootstrapper")}}{{.metadata.name}}{{"\n"}}{{end}}{{end}}' | head -1 || true)
-  if [ -z "${csr}" ]
-  then
-    sleep 5
-    continue
-  fi
-
-  echo "${csr} is pending. Verifying CSR before approving it..."
-  err=$(verify_csr_subject "${csr}")
-  if [ -n "${err}" ]
-  then
-    echo "${csr} could not be verified: ${err}"
-    break
-  fi
-
-  echo "${csr} successfully verified. Approving it..."
-  oc adm certificate approve "${csr}"
-done
-echo "${KUBELET_CLIENT_CERTIFICATE} is valid."
 
 # Reconfigure DNS
 node_ip=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type == "InternalIP")].address}')

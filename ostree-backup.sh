@@ -23,11 +23,11 @@ if [[ -z "$backup_repo" ]]; then
     exit 1
 fi
 
-log_it "Saving list of running containers and clusterversion"
+log_it "Saving list of running containers"
 if [[ ! -f /tmp/container_list.done ]]; then
     mkdir -p /var/tmp/backup
     crictl images -o json | jq -r '.images[] | .repoDigests[], .repoTags[]' > /var/tmp/backup/containers.list
-    oc get clusterversion version -ojson > /var/tmp/backup/clusterversion.json
+    oc get catalogsource -A -ojson | jq -r .items[].spec.image > /var/tmp/backup/catalogimages.list
     touch /tmp/container_list.done
 else
     echo "Container list already exists"
@@ -35,11 +35,11 @@ fi
 
 log_it "Stopping kubelet"
 systemctl stop kubelet
-log_it "Stopping containers"
 
+log_it "Stopping containers"
 if systemctl is-active --quiet crio; then
     while crictl ps -q | grep -q .; do 
-        crictl ps -q | xargs --no-run-if-empty crictl stop --timeout 5 || true
+        crictl ps -q | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl stop --timeout 5 || true
     done
     log_it "Stopping crio"
     systemctl stop crio

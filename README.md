@@ -40,9 +40,9 @@ make bake
 This will apply machine configs to the SNO instance (named sno1).
 
 - (OPTIONAL) With the cluster ready we can create an ostree backup to be imported in an existing SNO
-To do so, the credentials for writing in $BACKUP_REPO must be in an environment variable called `BACKUP_SECRET`, and then run:
+To do so, the credentials for writing in $SEED_IMAGE must be in an environment variable called `BACKUP_SECRET`, and then run:
 ```bash
-make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
+make ostree-backup SEED_IMAGE=quay.io/whatever/ostmagic:seed
 ```
 
 This will backup /var and /etc changes in an OCI container.
@@ -98,7 +98,7 @@ TODO: Apply recert after restoring the image
 #### Procedure
 Run the restore script:
 ```bash
-make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=recipient-sno
+make ostree-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed HOST=recipient-sno
 ```
 And then reboot the recipient-sno host
 
@@ -141,7 +141,7 @@ It is important to note that this will only configure the golden image, but in o
 #### Prerequisites
 Let's first define a few environment variables:
 ```
-BACKUP_REPO=quay.io/whatever/ostbackup
+SEED_IMAGE=quay.io/whatever/ostbackup:seed
 RECIPIENT_HOST=sno
 export PULL_SECRET=$(jq -c . /path/to/my/pull-secret.json)
 export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
@@ -149,7 +149,7 @@ export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
 #### Creation of relocatable image
 - Create new VM, apply the vDU profile, the relocation needed things, and create an ostree backup:
 ```
-make start-iso-abi wait-for-install-complete vdu ostree-shared-containers bake ostree-backup stop-baked-vm BACKUP_REPO=$BACKUP_REPO
+make start-iso-abi wait-for-install-complete vdu ostree-shared-containers bake ostree-backup stop-baked-vm SEED_IMAGE=$SEED_IMAGE
 ```
 #### Installing the backup into a running SNO
 - Copy the ssh key:
@@ -158,7 +158,7 @@ ssh-copy-id -i bootstrap-in-place-poc/ssh-key/key.pub core@$RECIPIENT_HOST
 ```
 - Restore the backup and copy site-config:
 ```
-make ostree-restore copy-config BACKUP_REPO=$BACKUP_REPO HOST=$RECIPIENT_HOST CLUSTER_NAME=new-name BASE_DOMAIN=foo.com SNOB_KUBECONFIG=path_to/recipient-kubeconfig
+make ostree-restore copy-config SEED_IMAGE=$SEED_IMAGE HOST=$RECIPIENT_HOST CLUSTER_NAME=new-name BASE_DOMAIN=foo.com SNOB_KUBECONFIG=path_to/recipient-kubeconfig
 ```
 - Reboot the recipient host
 - After host boots and finishes initialization process, copy new kubeconfig:

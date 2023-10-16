@@ -17,7 +17,7 @@ endif
 MODEL_VM_NAME  := sno1
 LIBVIRT_IMAGE_PATH := $(or ${LIBVIRT_IMAGE_PATH},/var/lib/libvirt/images)
 BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(MODEL_VM_NAME).qcow2
-BACKUP_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(MODEL_VM_NAME).qcow2
+BACKUP_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(MODEL_VM_NAME)-backup.qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
 CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/cluster-configuration/05_cluster-relocation.json
@@ -97,20 +97,20 @@ bootstrap-in-place-poc:
 
 wait-for-install-complete: ## Wait for start-iso-abi to complete
 	echo "Waiting for installation to complete"
-	until [ "$$($(oc) get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
+	@until [ "$$($(oc) get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
 			echo "Still waiting for installation to complete ..."; \
 			sleep 10; \
 	done
 
 backup-prebaked-image: ## Make a copy of a pre-baked model VM disk image to be reused
 	virsh shutdown $(MODEL_VM_NAME)
-	until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
 	cp "$(BASE_IMAGE_PATH_SNO)" "$(BACKUP_IMAGE_PATH_SNO)"
 	virsh start $(MODEL_VM_NAME)
 
 restore-prebaked-image: ## Restore a copy of a pre-baked model VM disk image
 	virsh destroy $(MODEL_VM_NAME)
-	until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
 	cp "$(BACKUP_IMAGE_PATH_SNO)" "$(BASE_IMAGE_PATH_SNO)"
 	virsh start $(MODEL_VM_NAME)
 
@@ -121,7 +121,7 @@ bake: machineConfigs ## Add changes into image template
 	$(oc) apply -f ./machineConfigs/installation-configuration.yaml
 	$(oc) apply -f ./machineConfigs/dnsmasq.yaml
 	echo "Wait for mcp to update, the node will reboot in the process"
-	for mc in 50-master-dnsmasq-configuration 99-master-installation-configuration; do \
+	@for mc in 50-master-dnsmasq-configuration 99-master-installation-configuration; do \
 		echo "Waiting for $$mc to be present in running rendered-master MachineConfig"; \
 		until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq $$mc; do \
 			echo -n .;\
@@ -143,8 +143,8 @@ stop-baked-vm: ## Shutdown and undefine model VM
 .PHONY: credentials/backup-secret.json
 credentials/backup-secret.json:
 	@test '$(BACKUP_SECRET)' || { echo "BACKUP_SECRET must be defined"; exit 1; }
-	mkdir -p credentials
-	echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
+	@mkdir -p credentials
+	@echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
 ostree-backup: credentials/backup-secret.json ## Backup model VM into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
 	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
@@ -167,12 +167,11 @@ machineConfigs/dnsmasq.yaml: bake/dnsmasq.conf bake/force-dns-script bake/unmana
 machineConfigs/internal-ip.yaml: bake/dispatcher-pre-up-internal-ip.sh bake/crio-nodenet.conf bake/kubelet-nodenet.conf
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-internal-ip.yaml > $@ || (rm $@ && false)
 
-
 wait-for-shutdown:
-	until sudo virsh domstate $(MODEL_VM_NAME) | grep shut; do \
-  		echo " $(MODEL_VM_NAME) still running"; \
-  		sleep 10; \
-    done
+	@until sudo virsh domstate $(MODEL_VM_NAME) | grep shut; do \
+		echo " $(MODEL_VM_NAME) still running"; \
+		sleep 10; \
+	done
 
 ### Create new image from template
 create-image-template: $(IMAGE_PATH_SNO_IN_LIBVIRT)
@@ -275,7 +274,7 @@ vdu: ## Apply VDU profile to model VM
 
 ostree-shared-containers: ## Setup a shared /var/lib/containers directory (to be used on ostree dual setups)
 	$(oc) apply -f ostree-var-lib-containers-machineconfig.yaml
-	echo "Waiting for 98-var-lib-containers to be present in running rendered-master MachineConfig"; \
+	@echo "Waiting for 98-var-lib-containers to be present in running rendered-master MachineConfig"; \
 	until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq 98-var-lib-containers; do \
 		echo -n .;\
 		sleep 30; \

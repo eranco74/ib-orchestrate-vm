@@ -106,6 +106,11 @@ function wait_for_api {
     echo "Waiting for api ..."
     sleep 5
   done
+  # Wait until the list of nodes has at least one
+  until oc get nodes -ojsonpath='{.items[0].metadata.name}' &> /dev/null; do
+    echo "Waiting for node ..."
+    sleep 5
+  done
   echo "api is available"
 }
 
@@ -204,7 +209,7 @@ fi
 echo "Applying cluster configuration"
 oc apply -f "${RELOCATION_CONFIG_PATH}"
 echo "Waiting for cluster relocation status"
-oc wait --timeout=1h clusterrelocation cluster --for condition=Reconciled=true
+oc wait --timeout=1h clusterrelocation cluster --for condition=Reconciled=true &> /dev/null
 echo "Cluster configuration updated"
 
 if [ -d ${EXTRA_MANIFESTS_PATH} ]; then

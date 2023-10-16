@@ -27,6 +27,16 @@ build_kargs(){
         | xargs --no-run-if-empty -I% echo -n "--karg % "
 }
 
+build_catalog_regex(){
+    if ostree cat $backup_tag catalogimages.list | grep -q .; then
+        for i in $(ostree cat $backup_tag catalogimages.list | cut -d : -f 1 ); do
+            echo $i:
+            echo $i@
+        done \
+            | paste -sd\|
+    fi
+}
+
 podman_unencapsulate(){
   local image=$1
   local ref=$2
@@ -100,12 +110,13 @@ oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.key --to=- 
 
 # If we have a shared container directory, precache all running images + images from ocp release
 if [[ -d "$shared_containers_dir" ]]; then
-    log_it "Precaching containers"
-    release_image=$(ostree cat $backup_tag /clusterversion.json | jq -r .status.desired.image)
-    (
-        oc adm release extract --from="$release_image" --file=image-references | jq -r .spec.tags[].from.name ;
-        ostree cat $backup_tag /containers.list
-    ) | sort -u | xargs -r -n1 crictl pull
+    log_it "Precaching non-catalog images"
+    ostree cat $backup_tag /containers.list | grep -vE $(build_catalog_regex) | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+
+    log_it "Precaching catalog images"
+    if ostree cat $backup_tag catalogimages.list | grep -q .; then
+        ostree cat $backup_tag catalogimages.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+    fi
 fi
 
 log_it "DONE. Be sure to attach the relocation site info to the host (either via ISO or make copy-config) and you can reboot the node"

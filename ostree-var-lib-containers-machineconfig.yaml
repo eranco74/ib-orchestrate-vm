@@ -111,7 +111,7 @@ spec:
           Description=Restore recursive SELinux security contexts
           DefaultDependencies=no
           After=remount-var-lib-containers.service
-          Before=crio.service
+          Before=container-mount-namespace.service crio.service
           [Service]
           Type=oneshot
           RemainAfterExit=yes

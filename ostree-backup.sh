@@ -63,7 +63,7 @@ else
 fi
 
 if [[ ! -f /var/tmp/backup/etc.tgz ]]; then
-    ostree admin config-diff | awk '{print "/etc/" $2}' | xargs tar czf /var/tmp/backup/etc.tgz --selinux
+    ostree admin config-diff | awk '$1 != "D" {print "/etc/" $2}' | xargs tar czf /var/tmp/backup/etc.tgz --selinux
 else
     echo "Skipping etc backup as it already exists"
 fi

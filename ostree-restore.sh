@@ -74,7 +74,7 @@ log_it "Restoring /etc"
 tar xzf ${img_mnt}/etc.tgz -C /ostree/deploy/$new_osname/deploy/$ostree_deploy --selinux
 
 log_it "Removing /etc deletions"
-ostree cat $backup_tag /etc.deletions | xargs --no-run-if-empty -ifile rm -f /ostree/deploy/$new_osname/deploy/$ostree_deploy/file
+cat ${img_mnt}/etc.deletions | xargs --no-run-if-empty -ifile rm -f /ostree/deploy/$new_osname/deploy/$ostree_deploy/file
 
 log_it "Waiting for API"
 until oc get clusterversion &>/dev/null; do

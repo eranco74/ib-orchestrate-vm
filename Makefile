@@ -146,14 +146,14 @@ credentials/backup-secret.json:
 	@mkdir -p credentials
 	@echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
-ostree-backup: credentials/backup-secret.json ## Backup model VM into ostree container		make ostree-backup BACKUP_REPO=quay.io/whatever/ostmagic
+ostree-backup: credentials/backup-secret.json ## Backup model VM into ostree container		make ostree-backup SEED_IMAGE=quay.io/whatever/ostmagic:seed
 	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
-	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo /tmp/ostree-backup.sh $(BACKUP_REPO)
+	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo /tmp/ostree-backup.sh $(SEED_IMAGE)
 
-ostree-restore: credentials/backup-secret.json ## Restore SNO from ostree OCI			make ostree-restore BACKUP_REPO=quay.io/whatever/ostmagic HOST=snob-sno
+ostree-restore: credentials/backup-secret.json ## Restore SNO from ostree OCI			make ostree-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed HOST=snob-sno
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
 	scp $(SSH_FLAGS) ostree-restore.sh credentials/*-secret.json core@$(HOST):/tmp
-	ssh $(SSH_FLAGS) core@$(HOST) sudo /tmp/ostree-restore.sh $(BACKUP_REPO)
+	ssh $(SSH_FLAGS) core@$(HOST) sudo /tmp/ostree-restore.sh $(SEED_IMAGE)
 
 machineConfigs: machineConfigs/installation-configuration.yaml machineConfigs/dnsmasq.yaml
 
@@ -255,8 +255,9 @@ site-config.iso: create-config ## Create site-config.iso				make site-config.iso
 copy-config: create-config ## Copy site-config to HOST				make copy-config CLUSTER_NAME=new-name BASE_DOMAIN=foo.com HOST=snob-sno SNOB_KUBECONFIG=snob_kubeconfig
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
 	echo "Copying site-config to $(HOST)"
-	ssh $(SSH_FLAGS) core@$(HOST) sudo mkdir -p /sysroot/ostree/deploy/ibu/var/opt/openshift
-	tar czC $(CONFIG_DIR) . | ssh $(SSH_FLAGS) core@$(HOST) sudo tar xvzC /sysroot/ostree/deploy/ibu/var/opt/openshift --no-same-owner
+	STATEROOT_B_NAME=$(shell ssh $(SSH_FLAGS) core@$(HOST) rpm-ostree status --json | jq -r '.deployments[] | select(.booted==false) | .osname'); \
+		ssh $(SSH_FLAGS) core@$(HOST) sudo mkdir -p /sysroot/ostree/deploy/$${STATEROOT_B_NAME}/var/opt/openshift; \
+		tar czC $(CONFIG_DIR) . | ssh $(SSH_FLAGS) core@$(HOST) sudo tar xvzC /sysroot/ostree/deploy/$${STATEROOT_B_NAME}/var/opt/openshift --no-same-owner
 
 $(SITE_CONFIG_PATH_IN_LIBVIRT): site-config.iso
 	sudo cp site-config.iso $(LIBVIRT_IMAGE_PATH)

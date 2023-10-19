@@ -29,8 +29,8 @@ build_catalog_regex(){
     fi
 }
 
-if [[ -z "$backup_repo" ]]; then
-    echo "ERROR. Backup repo is empty"
+if [[ -z "$seed_image" ]]; then
+    echo "ERROR. Seed image is empty"
     exit 1
 fi
 

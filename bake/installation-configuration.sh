@@ -50,6 +50,8 @@ set +o allexport
 
 if [[ -d "${NETWORK_CONFIG_PATH}" ]]; then
   echo "Static network configuration exist"
+  # Remove existing networking files
+  rm -f /etc/NetworkManager/system-connections/*
   cp "${NETWORK_CONFIG_PATH}"/*.nmconnection /etc/NetworkManager/system-connections/ -f
   systemctl restart NetworkManager
   # TODO: we might need to delete the connection first
@@ -59,8 +61,8 @@ fi
 
 # Recertify
 function recert {
-  RELEASE_IMAGE=quay.io/openshift-release-dev/ocp-release:4.13.5-x86_64
-  ETCD_IMAGE="$(oc adm release extract --from="$RELEASE_IMAGE" --file=image-references | jq '.spec.tags[] | select(.name == "etcd").from.name' -r)"
+  # Get the etcd image reference from the static pod manifest
+  ETCD_IMAGE=$(jq -r '.spec.containers[] | select(.name == "etcd") | .image' </etc/kubernetes/manifests/etcd-pod.yaml)
   RECERT_IMAGE="quay.io/edge-infrastructure/recert:latest"
   local certs_dir=/var/opt/openshift/certs
   local recert_cmd="sudo podman run --name recert --network=host --privileged -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --extend-expiration"

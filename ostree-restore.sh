@@ -4,7 +4,6 @@ set -e # Halt on error
 
 seed_image=${1:-$SEED_IMAGE}
 export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
-shared_containers_dir=/sysroot/containers
 my_dir=$(dirname $(readlink -f $0))
 
 log_it(){
@@ -91,15 +90,13 @@ done
 ingress_cn=$(oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.crt --to=- | openssl x509 -subject -noout -nameopt multiline | awk '/commonName/{print $3}')
 oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.key --to=- > "$certs_dir/ingresskey-$ingress_cn"
 
-# If we have a shared container directory, precache all running images + images from ocp release
-if [[ -d "$shared_containers_dir" ]]; then
-    log_it "Precaching non-catalog images"
-    grep -vE $(build_catalog_regex) ${img_mnt}/containers.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+# Always precache images. Container storage is expected to be shared between stateroots, whether via /sysroot/containers or a separate partition
+log_it "Precaching non-catalog images"
+grep -vE $(build_catalog_regex) ${img_mnt}/containers.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
 
-    log_it "Precaching catalog images"
-    if grep -q . ${img_mnt}/catalogimages.list; then
-       cat ${img_mnt}/catalogimages.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
-    fi
+log_it "Precaching catalog images"
+if grep -q . ${img_mnt}/catalogimages.list; then
+   cat ${img_mnt}/catalogimages.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
 fi
 
 log_it "Unmounting and deleting backup container image"

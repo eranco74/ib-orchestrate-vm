@@ -94,11 +94,11 @@ oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.key --to=- 
 # If we have a shared container directory, precache all running images + images from ocp release
 if [[ -d "$shared_containers_dir" ]]; then
     log_it "Precaching non-catalog images"
-    grep -vE $(build_catalog_regex) ${img_mnt}/containers.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+    grep -vE $(build_catalog_regex) ${img_mnt}/containers.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull || true
 
     log_it "Precaching catalog images"
     if grep -q . ${img_mnt}/catalogimages.list; then
-       cat ${img_mnt}/catalogimages.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+       cat ${img_mnt}/catalogimages.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull || true
     fi
 fi
 

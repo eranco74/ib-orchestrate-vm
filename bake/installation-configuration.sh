@@ -50,8 +50,6 @@ set +o allexport
 
 if [[ -d "${NETWORK_CONFIG_PATH}" ]]; then
   echo "Static network configuration exist"
-  # Remove existing networking files
-  rm -f /etc/NetworkManager/system-connections/*
   cp "${NETWORK_CONFIG_PATH}"/*.nmconnection /etc/NetworkManager/system-connections/ -f
   systemctl restart NetworkManager
   # TODO: we might need to delete the connection first

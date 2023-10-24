@@ -2,6 +2,8 @@
 
 set -e # Halt on error
 
+SKIP_PRECACHE="${SKIP_PRECACHE:-no}"
+
 seed_image=${1:-$SEED_IMAGE}
 export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 my_dir=$(dirname $(readlink -f $0))
@@ -26,6 +28,19 @@ build_catalog_regex(){
         done \
             | paste -sd\|
     fi
+}
+
+shared_container_storage(){
+    shared_containers_dir=/sysroot/containers
+    if [ -d "${shared_containers_dir}" ]; then
+        # Container storage is shared via bind-mount method
+        return 0
+    elif [ "$(stat -c %d /sysroot)" != "$(stat -c %d /var/lib/containers)" ]; then
+        # Container storage is on a separate partition from /sysroot
+        return 0
+    fi
+
+    return 1
 }
 
 if [[ -z "$seed_image" ]]; then
@@ -90,13 +105,15 @@ done
 ingress_cn=$(oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.crt --to=- | openssl x509 -subject -noout -nameopt multiline | awk '/commonName/{print $3}')
 oc extract -n openshift-ingress-operator secret/router-ca --keys=tls.key --to=- > "$certs_dir/ingresskey-$ingress_cn"
 
-# Always precache images. Container storage is expected to be shared between stateroots, whether via /sysroot/containers or a separate partition
-log_it "Precaching non-catalog images"
-grep -vE $(build_catalog_regex) ${img_mnt}/containers.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+# Precache images if container storage is shared between stateroots, whether via /sysroot/containers or a separate partition
+if shared_container_storage || [ "${SKIP_PRECACHE}" != "yes" ]; then
+    log_it "Precaching non-catalog images"
+    grep -vE $(build_catalog_regex) ${img_mnt}/containers.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
 
-log_it "Precaching catalog images"
-if grep -q . ${img_mnt}/catalogimages.list; then
-   cat ${img_mnt}/catalogimages.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+    log_it "Precaching catalog images"
+    if grep -q . ${img_mnt}/catalogimages.list; then
+        cat ${img_mnt}/catalogimages.list | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl pull
+    fi
 fi
 
 log_it "Unmounting and deleting backup container image"

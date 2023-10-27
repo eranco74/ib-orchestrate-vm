@@ -43,11 +43,66 @@ fi
 log_it "Stopping kubelet"
 systemctl stop kubelet
 
-log_it "Stopping containers"
 if systemctl is-active --quiet crio; then
-    while crictl ps -q | grep -q .; do 
+    log_it "Stopping containers"
+    while crictl ps -q | grep -q .; do
         crictl ps -q | xargs --no-run-if-empty --max-args 1 --max-procs 10 crictl stop --timeout 5 || true
     done
+else
+    echo "Skipping stop containers: CRI-O already not running"
+fi
+
+if [[ ! -f /tmp/recert_expired_certs.done ]]; then
+    log_it "Breaking cluster certificates by setting them to an expired date"
+    # Get the etcd image reference from the static pod manifest
+    ETCD_IMAGE=$(jq -r '.spec.containers[] | select(.name == "etcd") | .image' </etc/kubernetes/manifests/etcd-pod.yaml)
+    RECERT_IMAGE="quay.io/edge-infrastructure/recert:latest"
+
+    for container in recert_etcd recert; do
+        if sudo podman container exists $container; then
+            sudo podman rm -f $container
+        fi
+    done
+
+    # Run etcd
+    sudo podman run --name recert_etcd \
+        --authfile=/var/lib/kubelet/config.json \
+        --detach \
+        --rm \
+        --network=host \
+        --privileged \
+        --entrypoint etcd \
+        -v /var/lib/etcd:/store \
+        ${ETCD_IMAGE} \
+            --name editor \
+            --data-dir /store
+    sleep 10 # TODO: wait for etcd
+
+    # Run recert
+    sudo podman run --name recert \
+        --network=host \
+        --privileged \
+        --rm \
+        -v /var/opt/openshift:/var/opt/openshift \
+        -v /etc/kubernetes:/kubernetes \
+        -v /var/lib/kubelet:/kubelet \
+        -v /etc/machine-config-daemon:/machine-config-daemon \
+        ${RECERT_IMAGE} \
+            --etcd-endpoint localhost:2379 \
+            --static-dir /kubernetes \
+            --static-dir /kubelet \
+            --static-dir /machine-config-daemon \
+            --summary-file /kubernetes/recert-summary.yaml \
+            --force-expire
+
+    sudo podman kill recert_etcd
+
+    touch /tmp/recert_expired_certs.done
+else
+    echo "Seed cluster certificates already expired"
+fi
+
+if systemctl is-active --quiet crio; then
     log_it "Stopping crio"
     systemctl stop crio
 else

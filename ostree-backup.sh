@@ -58,12 +58,6 @@ if [[ ! -f /tmp/recert_expired_certs.done ]]; then
     ETCD_IMAGE=$(jq -r '.spec.containers[] | select(.name == "etcd") | .image' </etc/kubernetes/manifests/etcd-pod.yaml)
     RECERT_IMAGE="quay.io/edge-infrastructure/recert:latest"
 
-    for container in recert_etcd recert; do
-        if sudo podman container exists $container; then
-            sudo podman rm -f $container
-        fi
-    done
-
     # Run etcd
     sudo podman run --name recert_etcd \
         --authfile=/var/lib/kubelet/config.json \
@@ -71,6 +65,7 @@ if [[ ! -f /tmp/recert_expired_certs.done ]]; then
         --rm \
         --network=host \
         --privileged \
+        --replace \
         --entrypoint etcd \
         -v /var/lib/etcd:/store \
         ${ETCD_IMAGE} \
@@ -83,6 +78,7 @@ if [[ ! -f /tmp/recert_expired_certs.done ]]; then
         --network=host \
         --privileged \
         --rm \
+        --replace \
         -v /var/opt/openshift:/var/opt/openshift \
         -v /etc/kubernetes:/kubernetes \
         -v /var/lib/kubelet:/kubelet \

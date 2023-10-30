@@ -63,18 +63,12 @@ function recert {
   ETCD_IMAGE=$(jq -r '.spec.containers[] | select(.name == "etcd") | .image' </etc/kubernetes/manifests/etcd-pod.yaml)
   RECERT_IMAGE="quay.io/edge-infrastructure/recert:latest"
   local certs_dir=/var/opt/openshift/certs
-  local recert_cmd="sudo podman run --name recert --network=host --privileged -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --summary-file /kubernetes/recert-summary.yaml --extend-expiration"
+  local recert_cmd="sudo podman run --name recert --network=host --privileged --replace -v /var/opt/openshift:/var/opt/openshift -v /etc/kubernetes:/kubernetes -v /var/lib/kubelet:/kubelet -v /etc/machine-config-daemon:/machine-config-daemon ${RECERT_IMAGE} --etcd-endpoint localhost:2379 --static-dir /kubernetes --static-dir /kubelet --static-dir /machine-config-daemon --summary-file /kubernetes/recert-summary.yaml --extend-expiration"
 
-  if sudo podman container exists recert_etcd; then
-      sudo podman rm -f recert_etcd
-  fi
-  sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store
+  sudo podman run --authfile=/var/lib/kubelet/config.json --name recert_etcd --detach --rm --network=host --privileged --replace --entrypoint etcd -v /var/lib/etcd:/store ${ETCD_IMAGE} --name editor --data-dir /store
   sleep 10 # TODO: wait for etcd
   # Use previous cluster certs if directory is present
   if [[ -d $certs_dir ]]; then
-    if sudo podman container exists recert; then
-        sudo podman rm -f recert
-    fi
     ingress_key=$(readlink -f $certs_dir/ingresskey-*)
     ingress_cn=$(basename $ingress_key | cut -d - -f 2-)
     $recert_cmd \

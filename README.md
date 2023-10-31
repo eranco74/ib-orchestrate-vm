@@ -32,20 +32,23 @@ make wait-for-install-complete
 make vdu
 ```
 
-- Once the installation is complete create the image template:
+- Once the installation is completed we want to add a shared /var/lib/containers (see below in the Goodies section for more details)
 ```bash
-make bake
+make ostree-shared-containers
 ```
 
-This will apply machine configs to the SNO instance (named sno1).
+- And add the cluster-relocation-operator
+```bash
+make relocation-operator
+```
 
-- (OPTIONAL) With the cluster ready we can create an ostree backup to be imported in an existing SNO
+- With the cluster ready we can create an ostree backup to be imported in an existing SNO
 To do so, the credentials for writing in $SEED_IMAGE must be in an environment variable called `BACKUP_SECRET`, and then run:
 ```bash
-make ostree-backup SEED_IMAGE=quay.io/whatever/ostmagic:seed
+make ibu-imager SEED_IMAGE=quay.io/whatever/ostmagic:seed
 ```
 
-This will backup /var and /etc changes in an OCI container.
+This will run [ibu-imager](https://github.com/openshift-kni/lifecycle-agent/tree/main/ibu-imager) to create an OCI seed image
 
 - Once the preparation is complete, we should shutdown and undefine the VM
 ```bash
@@ -75,16 +78,16 @@ make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
 ## Extra goodies
 
 ### Backup and reuse pre-baked image
-At any point prior to the `make bake`, we can backup the VM used to generate the golden image, this allows for faster iteration and testing
+At any point we can backup the VM used to generate the golden image, this allows for faster iteration and testing
 
-To create a backup, before baking, run
+To create a backup run:
 ```bash
-make backup-prebaked-image
+make backup
 ```
 
-To restore that image, just run
+To restore that image, just run:
 ```bash
-make restore-prebaked-image
+make restore
 ```
 
 IMPORTANT: Remember that certificates expire, so if a backed up image is old, certificates will expire and openshift wont be usable
@@ -106,18 +109,6 @@ And then reboot the recipient-sno host
 A vDU profile can be applied to the image before baking with
 ```bash
 make vdu
-```
-
-### Use new partition for /var/lib/containers
-A 5th partition can be created to store the /var/lib/containers separately
-Before baking, run:
-```bash
-make external-container-partition
-```
-
-To keep the configuration for using an external partition /var/lib/containers, without including that partition into the final image, after baking run:
-```bash
-make remove-container-partition
 ```
 
 ### Use shared directorty for /var/lib/containers (to be used with ostree restore)
@@ -149,8 +140,9 @@ export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
 #### Creation of relocatable image
 - Create new VM, apply the vDU profile, the relocation needed things, and create an ostree backup:
 ```
-make start-iso-abi wait-for-install-complete vdu ostree-shared-containers bake ostree-backup stop-baked-vm SEED_IMAGE=$SEED_IMAGE
+make start-iso-abi wait-for-install-complete vdu ostree-shared-containers relocation-operator ibu-imager stop-baked-vm SEED_IMAGE=$SEED_IMAGE
 ```
+
 #### Installing the backup into a running SNO
 - Copy the ssh key:
 ```
@@ -169,3 +161,34 @@ ssh -i bootstrap-in-place-poc/ssh-key/key core@$RECIPIENT_HOST sudo cat /etc/kub
 ```
 oc --kubeconfig $RECIPIENT_HOST.kubeconfig get clusterrelocation cluster -ojson | jq .status.conditions
 ```
+
+## Deprecated functionality
+### Use new partition for /var/lib/containers
+A 5th partition can be created to store the /var/lib/containers separately
+Before baking, run:
+```bash
+make external-container-partition
+```
+
+To keep the configuration for using an external partition /var/lib/containers, without including that partition into the final image, after baking run:
+```bash
+make remove-container-partition
+```
+
+### Old style bake and ostree-backup
+This will use the ostree-backup.sh script to create a seed image. There are two steps needed for this:
+
+- Prepare the cluster by running
+```bash
+make bake
+```
+
+This will apply machine configs to the SNO instance (named sno1).
+
+- With the cluster ready we can create an ostree backup to be imported in an existing SNO
+To do so, the credentials for writing in $SEED_IMAGE must be in an environment variable called `BACKUP_SECRET`, and then run:
+```bash
+make ostree-backup SEED_IMAGE=quay.io/whatever/ostmagic:seed
+```
+
+This will backup /var and /etc changes in an OCI container.

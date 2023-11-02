@@ -27,7 +27,7 @@ EXTRA_MANIFESTS_PATH = ./edge_configs/extra-manifests
 MACHINE_NETWORK ?= 192.168.127.0/24
 CPU_CORE ?= 16
 RAM_MB ?= 32768
-
+IBU_IMAGER ?= quay.io/openshift-kni/lifecycle-agent-operator:latest
 NET_CONFIG_TEMPLATE = $(IMAGE_BASED_DIR)/template-net.xml
 NET_CONFIG = $(IMAGE_BASED_DIR)/net.xml
 
@@ -102,38 +102,12 @@ wait-for-install-complete: ## Wait for start-iso-abi to complete
 			sleep 10; \
 	done
 
-backup-prebaked-image: ## Make a copy of a pre-baked model VM disk image to be reused
-	virsh shutdown $(MODEL_VM_NAME)
-	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
-	cp "$(BASE_IMAGE_PATH_SNO)" "$(BACKUP_IMAGE_PATH_SNO)"
-	virsh start $(MODEL_VM_NAME)
-
-restore-prebaked-image: ## Restore a copy of a pre-baked model VM disk image
-	virsh destroy $(MODEL_VM_NAME)
-	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
-	cp "$(BACKUP_IMAGE_PATH_SNO)" "$(BASE_IMAGE_PATH_SNO)"
-	virsh start $(MODEL_VM_NAME)
-
-### Bake the image template
-
-bake: machineConfigs ## Add changes into image template
+.PHONY: relocation-operator
+relocation-operator: ## Install relocation-operator to model VM
 	$(oc) apply -f ./relocation-operator.yaml
-	$(oc) apply -f ./machineConfigs/installation-configuration.yaml
-	$(oc) apply -f ./machineConfigs/dnsmasq.yaml
-	echo "Wait for mcp to update, the node will reboot in the process"
-	@for mc in 50-master-dnsmasq-configuration 99-master-installation-configuration; do \
-		echo "Waiting for $$mc to be present in running rendered-master MachineConfig"; \
-		until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq $$mc; do \
-			echo -n .;\
-			sleep 30; \
-		done; echo; \
-	done
-	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
-	# TODO: add this once we have the bootstrap script
-	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
-	# Uncomment below line to generate an image that you can modify the script of and manually run
-	# instead of having it run automatically on boot. Useful for development.
-	# make -C $(SNO_DIR) ssh CMD="sudo systemctl disable installation-configuration"
+	sleep 5
+	@echo "Waiting for cluster-relocation-operator to be installed"
+	$(oc) wait subscription --timeout=20m --for=jsonpath='{.status.state}'=AtLatestKnown -n openshift-operators cluster-relocation-operator
 
 stop-baked-vm: ## Shutdown and undefine model VM
 	sudo virsh shutdown $(MODEL_VM_NAME)
@@ -146,9 +120,18 @@ credentials/backup-secret.json:
 	@mkdir -p credentials
 	@echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
-ostree-backup: credentials/backup-secret.json ## Backup model VM into ostree container		make ostree-backup SEED_IMAGE=quay.io/whatever/ostmagic:seed
-	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
-	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo /tmp/ostree-backup.sh $(SEED_IMAGE)
+.PHONY: ibu-imager
+ibu-imager: credentials/backup-secret.json ## Create seed image using ibu-imager		make ibu-imager SEED_IMAGE=quay.io/whatever/ostmagic:seed
+	scp $(SSH_FLAGS) credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
+	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo podman run --privileged --rm --pid=host --net=host \
+		-v /var:/var \
+		-v /var/run:/var/run \
+		-v /etc:/etc \
+		-v /run/systemd/journal/socket:/run/systemd/journal/socket \
+		-v /tmp/backup-secret.json:/tmp/backup-secret.json \
+		--entrypoint /ibu-imager \
+		$(IBU_IMAGER) \
+			create --authfile /tmp/backup-secret.json --image $(SEED_IMAGE)
 
 ostree-restore: credentials/backup-secret.json ## Restore SNO from ostree OCI			make ostree-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed HOST=snob-sno
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
@@ -273,7 +256,7 @@ vdu: ## Apply VDU profile to model VM
 	KUBECONFIG=$(SNO_KUBECONFIG) \
 	$(IMAGE_BASED_DIR)/vdu-profile.sh
 
-ostree-shared-containers: ## Setup a shared /var/lib/containers directory (to be used on ostree dual setups)
+ostree-shared-containers: ## Setup a shared /var/lib/containers directory
 	$(oc) apply -f ostree-var-lib-containers-machineconfig.yaml
 	@echo "Waiting for 98-var-lib-containers to be present in running rendered-master MachineConfig"; \
 	until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq 98-var-lib-containers; do \
@@ -282,13 +265,49 @@ ostree-shared-containers: ## Setup a shared /var/lib/containers directory (to be
 	done; echo
 	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
 
-external-container-partition: ## Configure model VM to use external /var/lib/containers
+.PHONY: backup
+backup: ## Make a copy of model VM (sno1) disk image to be reused
+	virsh shutdown $(MODEL_VM_NAME)
+	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	cp "$(BASE_IMAGE_PATH_SNO)" "$(BACKUP_IMAGE_PATH_SNO)"
+	virsh start $(MODEL_VM_NAME)
+
+.PHONY: restore
+restore: ## Restore a copy of model VM (sno1) disk image
+	virsh destroy $(MODEL_VM_NAME)
+	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	cp "$(BACKUP_IMAGE_PATH_SNO)" "$(BASE_IMAGE_PATH_SNO)"
+	virsh start $(MODEL_VM_NAME)
+
+bake: machineConfigs relocation-operator ## (DEPRECATED) Make mandatory changes to model VM to have a working seed image
+	$(oc) apply -f ./machineConfigs/installation-configuration.yaml
+	$(oc) apply -f ./machineConfigs/dnsmasq.yaml
+	echo "Wait for mcp to update, the node will reboot in the process"
+	@for mc in 50-master-dnsmasq-configuration 99-master-installation-configuration; do \
+		echo "Waiting for $$mc to be present in running rendered-master MachineConfig"; \
+		until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq $$mc; do \
+			echo -n .;\
+			sleep 30; \
+		done; echo; \
+	done
+	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
+	# TODO: add this once we have the bootstrap script
+	make -C $(SNO_DIR) ssh CMD="sudo systemctl disable kubelet"
+	# Uncomment below line to generate an image that you can modify the script of and manually run
+	# instead of having it run automatically on boot. Useful for development.
+	# make -C $(SNO_DIR) ssh CMD="sudo systemctl disable installation-configuration"
+
+ostree-backup: credentials/backup-secret.json ## (DEPRECATED) Create seed image using scripts	make ostree-backup SEED_IMAGE=quay.io/whatever/ostmagic:seed
+	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
+	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo /tmp/ostree-backup.sh $(SEED_IMAGE)
+
+external-container-partition: ## (DEPRECATED) Configure model VM to use external /var/lib/containers
 	VM_NAME=$(MODEL_VM_NAME) \
 	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
 	KUBECONFIG=$(SNO_KUBECONFIG) \
 	$(IMAGE_BASED_DIR)/external-varlibcontainers-create.sh
 
-remove-container-partition: ## Remove extra /var/lib/containers partition from baked image
+remove-container-partition: ## (DEPRECATED) Remove extra /var/lib/containers partition from baked image
 	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
 	$(IMAGE_BASED_DIR)/external-varlibcontainers-remove-partition.sh
 

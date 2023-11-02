@@ -79,7 +79,6 @@ if [[ ! -f /tmp/recert_expired_certs.done ]]; then
         --privileged \
         --rm \
         --replace \
-        -v /var/opt/openshift:/var/opt/openshift \
         -v /etc/kubernetes:/kubernetes \
         -v /var/lib/kubelet:/kubelet \
         -v /etc/machine-config-daemon:/machine-config-daemon \

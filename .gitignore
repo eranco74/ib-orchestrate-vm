@@ -1,4 +1,5 @@
 bootstrap-in-place-poc
+lifecycle-agent
 /.dns_changes_confirmed
 /net.xml
 /nohup.out

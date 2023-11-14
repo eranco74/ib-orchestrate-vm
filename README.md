@@ -37,15 +37,10 @@ make vdu
 make ostree-shared-containers
 ```
 
-- And add the cluster-relocation-operator
-```bash
-make relocation-operator
-```
-
 - With the cluster ready we can create an ostree backup to be imported in an existing SNO
 To do so, the credentials for writing in $SEED_IMAGE must be in an environment variable called `BACKUP_SECRET`, and then run:
 ```bash
-make ibu-imager SEED_IMAGE=quay.io/whatever/ostmagic:seed
+make seed-image SEED_IMAGE=quay.io/whatever/ostmagic:seed
 ```
 
 This will run [ibu-imager](https://github.com/openshift-kni/lifecycle-agent/tree/main/ibu-imager) to create an OCI seed image
@@ -55,25 +50,16 @@ This will run [ibu-imager](https://github.com/openshift-kni/lifecycle-agent/tree
 make stop-baked-vm
 ```
 
-This will shutdown the VM and remove it from the hypervisor, leaving us wih the prepaired qcow2 image in /var/lib/libvirt/images/sno1.qcow2.
+This will shutdown the VM and remove it from the hypervisor
 
-- Create the site-config iso wiht the configuration for the SNO instance at edge site:
-```bash
-make site-config.iso CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
+### Restore seed image into a running SNO
+To restore a seed image we will use [LifeCycle Agent](https://github.com/openshift-kni/lifecycle-agent), and manage everything with the CR `ImageBasedUpgrade`
+
 ```
-This will create the `site-config.iso` file, which will later get attached to the instance and once the instance is booted the `installation-configuration.service` will scan the attached devices,
-mount the iso, read the configuration and start the reconfiguration process.
-
-- To copy the previous VM's image into `/var/lib/libvirt/images/SNO-baked-image.qcow2` and then create a new SNO instance from it, with the `site-config.iso` attached, run:
-
-```bash
-make start-vm CLUSTER_NAME=new-name BASE_DOMAIN=foo.com
+make lca-seed-restore SNOB_KUBECONFIG=snob_kubeconfig SEED_IMAGE=quay.io/whatever/ostmagic:seed SEED_VERSION=4.13.5
 ```
 
-- In case you want to configure the new SNO with static network config add `STATIC_NETWORK=TRUE` to the above command.
-- In case you want to change the SNO hostname add `HOSTNAME=foobar` to the above command.
-
-- You can now monitor the progress using `make ssh` and `journalctl -f -u installation-configuration.service`
+And then, reboot the node where we ran the upgrade
 
 ## Extra goodies
 
@@ -133,34 +119,21 @@ It is important to note that this will only configure the golden image, but in o
 Let's first define a few environment variables:
 ```
 SEED_IMAGE=quay.io/whatever/ostbackup:seed
-RECIPIENT_HOST=sno
+SNOB_KUBECONFIG=path/to/recipient/kubeconfig
 export PULL_SECRET=$(jq -c . /path/to/my/pull-secret.json)
 export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
 ```
 #### Creation of relocatable image
 - Create new VM, apply the vDU profile, the relocation needed things, and create an ostree backup:
 ```
-make start-iso-abi wait-for-install-complete vdu ostree-shared-containers relocation-operator ibu-imager stop-baked-vm SEED_IMAGE=$SEED_IMAGE
+make start-iso-abi wait-for-install-complete vdu ostree-shared-containers seed-image stop-baked-vm SEED_IMAGE=$SEED_IMAGE
 ```
 
 #### Installing the backup into a running SNO
-- Copy the ssh key:
 ```
-ssh-copy-id -i bootstrap-in-place-poc/ssh-key/key.pub core@$RECIPIENT_HOST
-```
-- Restore the backup and copy site-config:
-```
-make ostree-restore copy-config SEED_IMAGE=$SEED_IMAGE HOST=$RECIPIENT_HOST CLUSTER_NAME=new-name BASE_DOMAIN=foo.com SNOB_KUBECONFIG=path_to/recipient-kubeconfig
+make lca-seed-restore SNOB_KUBECONFIG=$SNOB_KUBECONFIG SEED_IMAGE=$SEED_IMAGE
 ```
 - Reboot the recipient host
-- After host boots and finishes initialization process, copy new kubeconfig:
-```
-ssh -i bootstrap-in-place-poc/ssh-key/key core@$RECIPIENT_HOST sudo cat /etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig > $RECIPIENT_HOST.kubeconfig
-```
-- Wait until relocation operator finishes:
-```
-oc --kubeconfig $RECIPIENT_HOST.kubeconfig get clusterrelocation cluster -ojson | jq .status.conditions
-```
 
 ## Deprecated functionality
 ### Use new partition for /var/lib/containers

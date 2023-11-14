@@ -14,14 +14,19 @@ ifndef PULL_SECRET
 	$(error PULL_SECRET must be defined)
 endif
 
-MODEL_VM_NAME  ?= sno1
-MODEL_VM_IP  ?= 192.168.126.10
-SEED_CLUSTER_NAME ?= test-cluster.redhat.com
+SEED_VM_NAME  ?= seed
+SEED_VM_IP  ?= 192.168.126.10
 SEED_VERSION ?= 4.13.5
+SEED_MAC ?= 52:54:00:ee:42:e1
+
+RECIPIENT_VM_NAME ?= recipient
+RECIPIENT_VM_IP  ?= 192.168.126.99
+RECIPIENT_VERSION ?= 4.14.1
+RECIPIENT_MAC ?= 52:54:00:fa:ba:da
 
 LIBVIRT_IMAGE_PATH := $(or ${LIBVIRT_IMAGE_PATH},/var/lib/libvirt/images)
-BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(MODEL_VM_NAME).qcow2
-BACKUP_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(MODEL_VM_NAME)-backup.qcow2
+BASE_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(SEED_VM_NAME).qcow2
+BACKUP_IMAGE_PATH_SNO = $(LIBVIRT_IMAGE_PATH)/$(SEED_VM_NAME)-backup.qcow2
 IMAGE_PATH_SNO_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/SNO-baked-image.qcow2
 SITE_CONFIG_PATH_IN_LIBVIRT = $(LIBVIRT_IMAGE_PATH)/site-config.iso
 CLUSTER_RELOCATION_TEMPLATE = ./edge_configs/cluster-configuration/05_cluster-relocation.json
@@ -34,6 +39,7 @@ RAM_MB ?= 32768
 LCA_IMAGE ?= quay.io/openshift-kni/lifecycle-agent-operator:latest
 NET_CONFIG_TEMPLATE = $(IMAGE_BASED_DIR)/template-net.xml
 NET_CONFIG = $(IMAGE_BASED_DIR)/net.xml
+RELEASE_ARCH ?= x86_64
 
 
 NET_NAME = test-net-2
@@ -51,7 +57,8 @@ SSH_FLAGS = -o IdentityFile=$(SSH_KEY_PRIV_PATH) \
 HOST_IP = 192.168.128.10
 SSH_HOST = core@$(HOST_IP)
 
-SNO_KUBECONFIG ?= $(SNO_DIR)/sno-workdir/auth/kubeconfig
+CLUSTER ?= seed
+SNO_KUBECONFIG ?= $(SNO_DIR)/workdir-$(CLUSTER)/auth/kubeconfig
 oc = oc --kubeconfig $(SNO_KUBECONFIG)
 
 # Relocation config
@@ -77,7 +84,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake wait-for-install-complete $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition ostree-backup ostree-restore create-config copy-config ostree-shared-containers
+.PHONY: gather checkenv clean destroy-libvirt start-vm network ssh bake $(IMAGE_PATH_SNO_IN_LIBVIRT) $(NET_CONFIG) $(CONFIG_DIR) help vdu external-container-partition remove-container-partition ostree-backup ostree-restore create-config copy-config ostree-shared-containers
 
 .SILENT: destroy-libvirt
 
@@ -85,31 +92,64 @@ $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 start-iso: bootstrap-in-place-poc
 	make -C $(SNO_DIR) $@
 
-start-iso-abi: bootstrap-in-place-poc machineConfigs/internal-ip.yaml ## Install SNO cluster with ABI
-	# @echo "Add the internal-ip machine config - this is required until https://github.com/openshift/machine-config-operator/pull/3774 is merged"
-	# cp machineConfigs/internal-ip.yaml $(SNO_DIR)/manifests/
-	@echo "Replace the bootstrap-in-place agent-config.yaml with the config from this repo"
-	cp agent-config.yaml $(SNO_DIR)
+.PHONY: seed-vm-create
+seed-vm-create: VM_NAME=$(SEED_VM_NAME)
+seed-vm-create: HOST_IP=$(SEED_VM_IP)
+seed-vm-create: RELEASE_VERSION=$(SEED_VERSION)
+seed-vm-create: MAC_ADDRESS=$(SEED_MAC)
+seed-vm-create: start-iso-abi ## Install seed SNO cluster
+
+.PHONY: recipient-vm-create
+recipient-vm-create: VM_NAME=$(RECIPIENT_VM_NAME)
+recipient-vm-create: HOST_IP=$(RECIPIENT_VM_IP)
+recipient-vm-create: RELEASE_VERSION=$(RECIPIENT_VERSION)
+recipient-vm-create: MAC_ADDRESS=$(RECIPIENT_MAC)
+recipient-vm-create: start-iso-abi ## Install recipient SNO cluster
+
+start-iso-abi: bootstrap-in-place-poc
+	< agent-config-template.yaml \
+		VM_NAME=$(VM_NAME) \
+		HOST_IP=$(HOST_IP) \
+		HOST_MAC=$(MAC_ADDRESS) \
+		envsubst > $(SNO_DIR)/agent-config.yaml
 	make -C $(SNO_DIR) $@ \
-		MACHINE_NETWORK=${MACHINE_NETWORK} \
+		VM_NAME=$(VM_NAME) \
+		HOST_IP=$(HOST_IP) \
+		MACHINE_NETWORK=$(MACHINE_NETWORK) \
+		CLUSTER_NAME=$(VM_NAME) \
+		HOST_MAC=$(MAC_ADDRESS) \
+		INSTALLER_WORKDIR=workdir-$(VM_NAME)\
+		RELEASE_VERSION=$(RELEASE_VERSION) \
 		CPU_CORE=$(CPU_CORE) \
+		RELEASE_ARCH=$(RELEASE_ARCH) \
 		RAM_MB=$(RAM_MB)
 
 bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)
 	git clone https://github.com/eranco74/bootstrap-in-place-poc
 
-wait-for-install-complete: ## Wait for start-iso-abi to complete
+.PHONY: wait-for-seed
+wait-for-seed: CLUSTER=seed
+wait-for-seed: wait-for-install-complete ## Wait for seed cluster to complete installation
+
+.PHONY: wait-for-recipient
+wait-for-recipient: CLUSTER=recipient
+wait-for-recipient: wait-for-install-complete ## Wait for recipient cluster to complete installation
+
+.PHONY: wait-for-install-complete
+wait-for-install-complete:
 	echo "Waiting for installation to complete"
 	@until [ "$$($(oc) get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
-			echo "Still waiting for installation to complete ..."; \
-			sleep 10; \
-	done
+			echo -n .; sleep 10; \
+	done; \
+	echo " DONE"
 
-stop-baked-vm: ## Shutdown and undefine model VM
-	sudo virsh shutdown $(MODEL_VM_NAME)
-	make wait-for-shutdown
-	sudo virsh undefine $(MODEL_VM_NAME)
+destroy-vm:
+	@echo Destroying $(VM_NAME)
+	-virsh destroy $(VM_NAME)
+	@until virsh domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 2; done; echo
+	-rm "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-backup.qcow2"
+	sudo virsh undefine $(VM_NAME)
 
 .PHONY: credentials/backup-secret.json
 credentials/backup-secret.json:
@@ -118,19 +158,15 @@ credentials/backup-secret.json:
 	@echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
 # dnsmasq workaround until https://github.com/openshift/assisted-service/pull/5658 is in assisted
-dnsmasq-workaround: ## Apply dnsmasq workaround to MODEL_VM
-	./generate-dnsmasq-machineconfig.sh --name $(SEED_CLUSTER_NAME) --ip $(MODEL_VM_IP) | $(oc) apply -f -
-	# @echo "Waiting for 50-master-dnsmasq-configuration to be present in running rendered-master MachineConfig"; \
-	# until $(oc) get mcp master -ojson | jq -r .status.configuration.source[].name | grep -xq 50-master-dnsmasq-configuration; do \
-	# 	echo -n .;\
-	# 	sleep 30; \
-	# done; echo
-	# $(oc) wait --timeout=20m --for=condition=updated=true mcp master
+dnsmasq-workaround: SEED_CLUSTER_NAME ?= $(SEED_VM_NAME).redhat.com
+wait-for-seed-install-complete: CLUSTER=$(SEED_VM_NAME)
+dnsmasq-workaround: ## Apply dnsmasq workaround to SEED_VM
+	./generate-dnsmasq-machineconfig.sh --name $(SEED_CLUSTER_NAME) --ip $(SEED_VM_IP) | $(oc) apply -f -
 
-.PHONY: seed-image
-seed-image: credentials/backup-secret.json ## Create seed image using ibu-imager		make seed-image SEED_IMAGE=quay.io/whatever/ostmagic:seed
-	scp $(SSH_FLAGS) credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
-	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo podman run --privileged --rm --pid=host --net=host \
+.PHONY: seed-image-create
+seed-image-create: credentials/backup-secret.json ## Create seed image using ibu-imager		make seed-image SEED_IMAGE=quay.io/whatever/ostmagic:seed
+	scp $(SSH_FLAGS) credentials/backup-secret.json core@$(SEED_VM_NAME):/tmp
+	ssh $(SSH_FLAGS) core@$(SEED_VM_NAME) sudo podman run --privileged --rm --pid=host --net=host \
 		-v /var:/var \
 		-v /var/run:/var/run \
 		-v /etc:/etc \
@@ -153,8 +189,8 @@ machineConfigs/internal-ip.yaml: bake/dispatcher-pre-up-internal-ip.sh bake/crio
 	podman run -i -v ./bake:/scripts/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /scripts < butane-internal-ip.yaml > $@ || (rm $@ && false)
 
 wait-for-shutdown:
-	@until sudo virsh domstate $(MODEL_VM_NAME) | grep shut; do \
-		echo " $(MODEL_VM_NAME) still running"; \
+	@until sudo virsh domstate $(SEED_VM_NAME) | grep shut; do \
+		echo " $(SEED_VM_NAME) still running"; \
 		sleep 10; \
 	done
 
@@ -163,42 +199,48 @@ lifecycle-agent:
 	git clone https://github.com/openshift-kni/lifecycle-agent
 
 .PHONY: lifecycle-agent-deploy
-lifecycle-agent-deploy: lifecycle-agent ## Deploy lifecycle agent				make lifecycle-agent-deploy SNOB_KUBECONFIG=snob_kubeconfig
-	KUBECONFIG=$(SNOB_KUBECONFIG) make -C lifecycle-agent install deploy
+lifecycle-agent-deploy: CLUSTER=$(RECIPIENT_VM_NAME)
+lifecycle-agent-deploy: lifecycle-agent
+	KUBECONFIG=../$(SNO_KUBECONFIG) make -C lifecycle-agent install deploy
 	@echo "Waiting for deployment lifecycle-agent-controller-manager to be available"; \
-	until KUBECONFIG=$(SNOB_KUBECONFIG) oc wait deployment -n openshift-lifecycle-agent lifecycle-agent-controller-manager --for=condition=available=true; do \
+	until $(oc) wait deployment -n openshift-lifecycle-agent lifecycle-agent-controller-manager --for=condition=available=true; do \
 		echo -n .;\
 		sleep 5; \
 	done; echo
 
-.PHONY: lca-seed-restore
-lca-seed-restore: lifecycle-agent-deploy lca-stage-idle lca-stage-prepca-wait-for-prep lca-stage-upgrade lca-wait-for-upgrade ## Restore seed image				make lca-seed-restore SNOB_KUBECONFIG=snob_kubeconfig SEED_IMAGE=quay.io/whatever/ostmagic:seed SEED_VERSION=4.13.5
+.PHONY: seed-image-restore
+seed-image-restore: CLUSTER=$(RECIPIENT_VM_NAME)
+seed-image-restore: lifecycle-agent-deploy lca-stage-idle lca-stage-prep lca-wait-for-prep lca-stage-upgrade lca-wait-for-upgrade ## Restore seed image				make lca-seed-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed SEED_VERSION=4.13.5
 	@echo "Seed image restoration process complete"
 	@echo "Reboot SNO to finish the upgrade process"
 
 .PHONY: lca-stage-idle
-lca-stage-idle: credentials/backup-secret.json ## Create Idle ImageBasedUpgrade LCA resource	make lca-stage-idle SNOB_KUBECONFIG=snob_kubeconfig
-	oc create secret generic seed-pull-secret -n default --from-file=.dockerconfigjson=credentials/backup-secret.json \
+lca-stage-idle: CLUSTER=$(RECIPIENT_VM_NAME)
+lca-stage-idle: credentials/backup-secret.json
+	$(oc) create secret generic seed-pull-secret -n default --from-file=.dockerconfigjson=credentials/backup-secret.json \
 		--type=kubernetes.io/dockerconfigjson --dry-run=client -oyaml \
-		| KUBECONFIG=$(SNOB_KUBECONFIG) oc apply -f -
-	SEED_VERSION=$(SEED_VERSION) SEED_IMAGE=$(SEED_IMAGE) envsubst < imagebasedupgrade.yaml | KUBECONFIG=$(SNOB_KUBECONFIG) oc apply -f -
+		| $(oc) apply -f -
+	SEED_VERSION=$(SEED_VERSION) SEED_IMAGE=$(SEED_IMAGE) envsubst < imagebasedupgrade.yaml | $(oc) apply -f -
 
 .PHONY: lca-stage-prep
-lca-stage-prep: ## Set ImageBasedUpgrade to stage Prep		make lca-stage-prep SNOB_KUBECONFIG=snob_kubeconfig
-	KUBECONFIG=$(SNOB_KUBECONFIG) oc patch --type=json ibu -n default upgrade --type merge -p '{"spec": { "stage": "Prep"}}'
+lca-stage-prep: CLUSTER=$(RECIPIENT_VM_NAME)
+lca-stage-prep:
+	$(oc) patch --type=json ibu -n default upgrade --type merge -p '{"spec": { "stage": "Prep"}}'
 
 .PHONY: lca-wait-for-prep
-lca-wait-for-prep: ## Wait for Prep to complete			make lca-wait-for-prep SNOB_KUBECONFIG=snob_kubeconfig
-	KUBECONFIG=$(SNOB_KUBECONFIG) oc wait --timeout=30m --for=condition=PrepCompleted=true ibu -n default upgrade
+lca-wait-for-prep: CLUSTER=$(RECIPIENT_VM_NAME)
+lca-wait-for-prep:
+	$(oc) wait --timeout=30m --for=condition=PrepCompleted=true ibu -n default upgrade
 
 .PHONY: lca-stage-upgrade
-lca-stage-upgrade: ## Set IBU to stage Upgrade				make lca-stage-upgrade SNOB_KUBECONFIG=snob_kubeconfig
-	# @test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
-	KUBECONFIG=$(SNOB_KUBECONFIG) oc patch --type=json ibu -n default upgrade --type merge -p '{"spec": { "stage": "Upgrade"}}'
+lca-stage-upgrade: CLUSTER=$(RECIPIENT_VM_NAME)
+lca-stage-upgrade:
+	$(oc) patch --type=json ibu -n default upgrade --type merge -p '{"spec": { "stage": "Upgrade"}}'
 
 .PHONY: lca-wait-for-upgrade
-lca-wait-for-upgrade: ## Wait for Upgrade to complete			make lca-wait-for-prep SNOB_KUBECONFIG=snob_kubeconfig
-	KUBECONFIG=$(SNOB_KUBECONFIG) oc wait --timeout=30m --for=condition=UpgradeCompleted=true ibu -n default upgrade
+lca-wait-for-upgrade: CLUSTER=$(RECIPIENT_VM_NAME)
+lca-wait-for-upgrade:
+	$(oc) wait --timeout=30m --for=condition=UpgradeCompleted=true ibu -n default upgrade
 
 ### Create new image from template
 create-image-template: $(IMAGE_PATH_SNO_IN_LIBVIRT)
@@ -297,10 +339,11 @@ update_script:
 	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl daemon-reload"
 	ssh $(SSH_FLAGS) $(SSH_HOST) "sudo systemctl restart installation-configuration.service --no-block"
 
-vdu: ## Apply VDU profile to model VM
+vdu: ## Apply VDU profile to seed VM
 	KUBECONFIG=$(SNO_KUBECONFIG) \
 	$(IMAGE_BASED_DIR)/vdu-profile.sh
 
+ostree-shared-containers: NAME=$(SEED_VM_NAME)
 ostree-shared-containers: ## Setup a shared /var/lib/containers directory
 	$(oc) apply -f ostree-var-lib-containers-machineconfig.yaml
 	@echo "Waiting for 98-var-lib-containers to be present in running rendered-master MachineConfig"; \
@@ -310,28 +353,48 @@ ostree-shared-containers: ## Setup a shared /var/lib/containers directory
 	done; echo
 	$(oc) wait --timeout=20m --for=condition=updated=true mcp master
 
-.PHONY: backup
-backup: ## Make a copy of model VM (sno1) disk image to be reused
-	virsh shutdown $(MODEL_VM_NAME)
-	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
-	cp "$(BASE_IMAGE_PATH_SNO)" "$(BACKUP_IMAGE_PATH_SNO)"
-	virsh start $(MODEL_VM_NAME)
+.PHONY: vm-backup
+vm-backup:
+	virsh shutdown $(VM_NAME)
+	@until virsh domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2"
+	virsh start $(VM_NAME)
 
-.PHONY: restore
-restore: ## Restore a copy of model VM (sno1) disk image
-	virsh destroy $(MODEL_VM_NAME)
-	@until virsh domstate $(MODEL_VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
-	cp "$(BACKUP_IMAGE_PATH_SNO)" "$(BASE_IMAGE_PATH_SNO)"
-	virsh start $(MODEL_VM_NAME)
+.PHONY: vm-restore
+vm-restore:
+	-virsh destroy $(VM_NAME)
+	@until virsh domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2"
+	virsh start $(VM_NAME)
+
+.PHONY: seed-vm-backup
+seed-vm-backup: VM_NAME=$(SEED_VM_NAME)
+seed-vm-backup: VERSION=$(SEED_VERSION)
+seed-vm-backup: vm-backup ## Make a copy of seed VM disk image (qcow2 file)
+
+.PHONY: seed-vm-restore
+seed-vm-restore: VM_NAME=$(SEED_VM_NAME)
+seed-vm-restore: VERSION=$(SEED_VERSION)
+seed-vm-restore: vm-restore ## Restore a copy of seed VM disk image (qcow2 file)
+
+.PHONY: recipient-vm-backup
+recipient-vm-backup: VM_NAME=$(RECIPIENT_VM_NAME)
+recipient-vm-backup: VERSION=$(RECIPIENT_VERSION)
+recipient-vm-backup: vm-backup ## Make a copy of recipient VM disk image (qcow2 file)
+
+.PHONY: recipient-vm-restore
+recipient-vm-restore: VM_NAME=$(RECIPIENT_VM_NAME)
+recipient-vm-restore: VERSION=$(RECIPIENT_VERSION)
+recipient-vm-restore: vm-restore ## Restore a copy of recipient VM disk image (qcow2 file)
 
 .PHONY: relocation-operator
-relocation-operator: ## (DEPRECATED) Install relocation-operator to model VM
+relocation-operator: ## (DEPRECATED) Install relocation-operator to seed VM
 	$(oc) apply -f ./relocation-operator.yaml
 	sleep 5
 	@echo "Waiting for cluster-relocation-operator to be installed"
 	$(oc) wait subscription --timeout=20m --for=jsonpath='{.status.state}'=AtLatestKnown -n openshift-operators cluster-relocation-operator
 
-bake: machineConfigs relocation-operator ## (DEPRECATED) Make mandatory changes to model VM to have a working seed image
+bake: machineConfigs relocation-operator ## (DEPRECATED) Make mandatory changes to seed VM to have a working seed image
 	$(oc) apply -f ./machineConfigs/installation-configuration.yaml
 	$(oc) apply -f ./machineConfigs/dnsmasq.yaml
 	echo "Wait for mcp to update, the node will reboot in the process"
@@ -350,16 +413,16 @@ bake: machineConfigs relocation-operator ## (DEPRECATED) Make mandatory changes 
 	# make -C $(SNO_DIR) ssh CMD="sudo systemctl disable installation-configuration"
 
 ostree-backup: credentials/backup-secret.json ## (DEPRECATED) Create seed image using scripts	make ostree-backup SEED_IMAGE=quay.io/whatever/ostmagic:seed
-	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@$(MODEL_VM_NAME):/tmp
-	ssh $(SSH_FLAGS) core@$(MODEL_VM_NAME) sudo /tmp/ostree-backup.sh $(SEED_IMAGE)
+	scp $(SSH_FLAGS) ostree-backup.sh credentials/backup-secret.json core@$(SEED_VM_NAME):/tmp
+	ssh $(SSH_FLAGS) core@$(SEED_VM_NAME) sudo /tmp/ostree-backup.sh $(SEED_IMAGE)
 
 ostree-restore: credentials/backup-secret.json ## (DEPRECATED) Restore SNO from ostree OCI		make ostree-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed HOST=snob-sno
 	@test "$(HOST)" || { echo "HOST must be defined"; exit 1; }
 	scp $(SSH_FLAGS) ostree-restore.sh credentials/*-secret.json core@$(HOST):/tmp
 	ssh $(SSH_FLAGS) core@$(HOST) sudo /tmp/ostree-restore.sh $(SEED_IMAGE)
 
-external-container-partition: ## (DEPRECATED) Configure model VM to use external /var/lib/containers
-	VM_NAME=$(MODEL_VM_NAME) \
+external-container-partition: ## (DEPRECATED) Configure seed VM to use external /var/lib/containers
+	VM_NAME=$(SEED_VM_NAME) \
 	BASE_IMAGE_PATH_SNO=$(BASE_IMAGE_PATH_SNO) \
 	KUBECONFIG=$(SNO_KUBECONFIG) \
 	$(IMAGE_BASED_DIR)/external-varlibcontainers-create.sh

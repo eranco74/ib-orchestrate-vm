@@ -1,0 +1,12 @@
+apiVersion: lca.openshift.io/v1alpha1
+kind: ImageBasedUpgrade
+metadata:
+    name: upgrade
+    namespace: default
+spec:
+    stage: Idle
+    seedImageRef:
+        version: ${SEED_VERSION}
+        image: ${SEED_IMAGE}
+        pullSecretRef:
+          name: seed-pull-secret

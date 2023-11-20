@@ -1,22 +1,22 @@
 apiVersion: v1alpha1
 kind: AgentConfig
 metadata:
-  name: sno-cluster
-rendezvousIP: 192.168.126.10
+  name: ${VM_NAME}-sno-cluster
+rendezvousIP: ${HOST_IP}
 hosts:
-  - hostname: master-0
+  - hostname: ${VM_NAME}
     interfaces:
       - name: eno1
-        macAddress: 52:54:00:ee:42:e1
+        macAddress: ${HOST_MAC}
     networkConfig:
       interfaces:
         - name: eno1
           type: ethernet
           state: up
-          mac-address: 52:54:00:ee:42:e1
+          mac-address: ${HOST_MAC}
           ipv4:
             enabled: true
             address:
-              - ip: 192.168.127.10
+              - ip: ${HOST_IP}
                 prefix-length: 24
             dhcp: true

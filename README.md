@@ -14,6 +14,62 @@ sudo dnf install nmstate
 - Set `BACKUP_SECRET` environment variable with the credentials needed to push/pull the seed image, in standard pull-secret format
 ```
 
+- virt-install
+
+```bash
+sudo dnf install virt-install
+```
+
+## Fedora prerequisites
+
+### If using systemd-resolved as a system DNS resolver
+
+<details>
+  <summary>Show more info</summary>
+
+
+Add the `NetworkManager` dnsmasq instance as a DNS server for resolved:
+
+```bash
+sudo mkdir /etc/systemd/resolved.conf.d
+```
+
+Then create `/etc/systemd/resolved.conf.d/dns_servers.conf` with:
+
+```
+[Resolve]
+DNS=127.0.0.1
+Domains=~.
+```
+
+And finally restart systemd-resolved:
+
+```bash
+sudo systemctl restart systemd-resolved
+```
+
+</details>
+
+### If using authselect as nsswitch manager
+
+<details>
+  <summary>Show more info</summary>
+
+#### Install libvirt-nss
+```bash
+sudo dnf install libvirt-nss
+```
+
+#### Add authselect libvirt feature
+
+```bash
+sudo authselect enable-feature with-libvirt
+```
+
+</details>
+
+This makes it so that libvirt guest names resolve to IP addresses
+
 ## Procedure
 ### Generate the seed image template
 To generate a seed image we want to:

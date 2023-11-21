@@ -85,7 +85,7 @@ make vdu
 
 - Prepare the seed cluster to have a couple of needed extras
 ```bash
-make dnsmasq-workaround ostree-shared-containers
+make dnsmasq-workaround seed-varlibcontainers
 ```
 
 - Create a seed image from that SNO cluster
@@ -93,6 +93,10 @@ make dnsmasq-workaround ostree-shared-containers
 make seed-image-create SEED_IMAGE=quay.io/whatever/repo:tag
 ```
 This will run [ibu-imager](https://github.com/openshift-kni/lifecycle-agent/tree/main/ibu-imager) to create an OCI seed image
+
+> **WARNING**
+> Once we create a seed-image, some changes will be applied to seed VM that will "break" the node. If you intend on reusing that seed VM, it would be wise to create a backup using `make seed-vm-backup` that you can restore afterwards
+
 
 ### Restore seed image
 To restore a seed image we will use [LifeCycle Agent](https://github.com/openshift-kni/lifecycle-agent), and manage everything with the CR `ImageBasedUpgrade`
@@ -106,7 +110,7 @@ make recipient-vm-create wait-for-recipient
 
 - Prepare the recipient cluster to use /var/lib/containers in a directory that can be shared among different deployments
 ```bash
-make ostree-shared-containers CLUSTER=recipient
+make recipient-varlibcontainers
 ```
 
 - Restore the seed image
@@ -120,6 +124,13 @@ virsh reboot recipient
 ```
 
 ## Extra goodies
+
+### Descriptive help for the Makefile
+You can run
+```bash
+make help
+```
+and get a description of the main Makefile targets that you can use
 
 ### Backup and reuse VM qcow2 files
 To be able to reuse the VMs, we can backup the qcow2 files of both seed and recipient VM
@@ -152,14 +163,14 @@ make vdu
 ```
 
 ### Use shared directorty for /var/lib/containers
-A shared directory `/sysroot/containers` can be used to mount and share /var/lib/containers when using ostree based dual boot
-Before baking, run:
+A shared directory `/sysroot/containers` can be used to mount and share /var/lib/containers among ostree deployments
+Run:
 ```bash
-make ostree-shared-containers
+make seed-varlibcontainers
 ```
 or
 ```bash
-make ostree-shared-containers CLUSTER=recipient
+make recipient-varlibcontainers
 ```
 
 This will create a `/sysroot/containers` in the SNO (when not specifying the cluster with the CLUSTER variable, it defaults to the seed image) to be mounted in /var/lib/containers

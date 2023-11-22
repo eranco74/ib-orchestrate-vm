@@ -95,16 +95,19 @@ seed-vm-restore: VM_NAME=$(SEED_VM_NAME)
 seed-vm-restore: VERSION=$(SEED_VERSION)
 seed-vm-restore: vm-restore ## Restore a copy of seed VM disk image (qcow2 file)
 
+.PHONY: seed-cluster-prepare
+seed-cluster-prepare: dnsmasq-workaround seed-varlibcontainers ## Prepare seed VM cluster
+
 .PHONY: dnsmasq-workaround
 # dnsmasq workaround until https://github.com/openshift/assisted-service/pull/5658 is in assisted
 dnsmasq-workaround: SEED_CLUSTER_NAME ?= $(SEED_VM_NAME).redhat.com
 dnsmasq-workaround: CLUSTER=$(SEED_VM_NAME)
-dnsmasq-workaround: ## Apply dnsmasq workaround to SEED_VM
+dnsmasq-workaround:
 	./generate-dnsmasq-machineconfig.sh --name $(SEED_CLUSTER_NAME) --ip $(SEED_VM_IP) | $(oc) apply -f -
 
 .PHONY: seed-varlibcontainers
 seed-varlibcontainers: CLUSTER=$(SEED_VM_NAME)
-seed-varlibcontainers: shared-varlibcontainers ## Setup seed VM with a shared /var/lib/containers
+seed-varlibcontainers: shared-varlibcontainers
 
 .PHONY: vdu
 vdu: ## Apply VDU profile to seed VM
@@ -137,9 +140,22 @@ recipient-vm-restore: VM_NAME=$(RECIPIENT_VM_NAME)
 recipient-vm-restore: VERSION=$(RECIPIENT_VERSION)
 recipient-vm-restore: vm-restore ## Restore a copy of recipient VM disk image (qcow2 file)
 
+.PHONY: recipient-cluster-prepare
+recipient-cluster-prepare: recipient-varlibcontainers oadp-deploy lifecycle-agent-deploy ## Prepare recipient VM cluster
+
 .PHONY: recipient-varlibcontainers
 recipient-varlibcontainers: CLUSTER=$(RECIPIENT_VM_NAME)
-recipient-varlibcontainers: shared-varlibcontainers ## Setup recipient VM with a shared /var/lib/containers
+recipient-varlibcontainers: shared-varlibcontainers
+
+.PHONY: oadp-deploy
+oadp-deploy: CLUSTER=$(RECIPIENT_VM_NAME)
+oadp-deploy:
+	$(oc) apply -f oadp-operator.yaml
+	@echo "Waiting for deployment openshift-adp-controller-manager to be available"; \
+	until $(oc) wait deployment -n openshift-adp openshift-adp-controller-manager --for=condition=available=true; do \
+		echo -n .;\
+		sleep 5; \
+	done; echo
 
 ## Seed creation
 .PHONY: seed-image-create
@@ -159,10 +175,14 @@ seed-image-create: credentials/backup-secret.json ## Create seed image using ibu
 ## Seed restoring
 .PHONY: seed-image-restore
 seed-image-restore: CLUSTER=$(RECIPIENT_VM_NAME)
-seed-image-restore: lifecycle-agent-deploy lca-stage-idle lca-stage-prep lca-wait-for-prep lca-stage-upgrade lca-wait-for-upgrade ## Restore seed image				make lca-seed-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed SEED_VERSION=4.13.5
+seed-image-restore: lca-stage-idle lca-wait-for-idle lca-stage-prep lca-wait-for-prep lca-stage-upgrade lca-wait-for-upgrade ## Restore seed image				make lca-seed-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed SEED_VERSION=4.13.5
 	@echo "Seed image restoration process complete"
 	@echo "Reboot SNO to finish the upgrade process"
 
+.PHONY: lca-logs
+lca-logs: CLUSTER=$(RECIPIENT_VM_NAME)
+lca-logs: ## Tail through LifeCycle Agent logs
+	$(oc) logs -f -c manager -n openshift-lifecycle-agent -l app.kubernetes.io/component=lifecycle-agent
 
 start-iso-abi: checkenv bootstrap-in-place-poc
 	< agent-config-template.yaml \
@@ -213,6 +233,11 @@ lca-stage-idle: credentials/backup-secret.json
 		--type=kubernetes.io/dockerconfigjson --dry-run=client -oyaml \
 		| $(oc) apply -f -
 	SEED_VERSION=$(SEED_VERSION) SEED_IMAGE=$(SEED_IMAGE) envsubst < imagebasedupgrade.yaml | $(oc) apply -f -
+
+.PHONY: lca-wait-for-idle
+lca-wait-for-idle: CLUSTER=$(RECIPIENT_VM_NAME)
+lca-wait-for-idle:
+	$(oc) wait --timeout=30m --for=condition=Idle=true ibu -n default upgrade
 
 .PHONY: lca-stage-prep
 lca-stage-prep: CLUSTER=$(RECIPIENT_VM_NAME)

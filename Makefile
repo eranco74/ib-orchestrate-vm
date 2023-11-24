@@ -64,9 +64,13 @@ bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)
 	git clone https://github.com/eranco74/bootstrap-in-place-poc
 
+.PHONY: lifecycle-agent
 lifecycle-agent:
-	rm -rf lifecycle-agent
-	git clone https://github.com/openshift-kni/lifecycle-agent
+	@if [ -d lifecycle-agent ]; then \
+		git -C lifecycle-agent pull ;\
+	else \
+		git clone https://github.com/openshift-kni/lifecycle-agent ;\
+	fi
 
 ## Seed VM management
 

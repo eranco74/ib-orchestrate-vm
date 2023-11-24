@@ -194,9 +194,13 @@ wait-for-shutdown:
 		sleep 10; \
 	done
 
+.PHONY: lifecycle-agent
 lifecycle-agent:
-	rm -rf lifecycle-agent
-	git clone https://github.com/openshift-kni/lifecycle-agent
+	@if [ -d lifecycle-agent ]; then \
+		git -C lifecycle-agent pull ;\
+	else \
+		git clone https://github.com/openshift-kni/lifecycle-agent ;\
+	fi
 
 .PHONY: lifecycle-agent-deploy
 lifecycle-agent-deploy: CLUSTER=$(RECIPIENT_VM_NAME)

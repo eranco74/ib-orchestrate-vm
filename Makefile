@@ -99,8 +99,12 @@ seed-vm-restore: VM_NAME=$(SEED_VM_NAME)
 seed-vm-restore: VERSION=$(SEED_VERSION)
 seed-vm-restore: vm-restore ## Restore a copy of seed VM disk image (qcow2 file)
 
+.PHONY: seed-lifecycle-agent-deploy
+seed-lifecycle-agent-deploy: CLUSTER=$(SEED_VM_NAME)
+seed-lifecycle-agent-deploy: lifecycle-agent-deploy
+
 .PHONY: seed-cluster-prepare
-seed-cluster-prepare: dnsmasq-workaround seed-varlibcontainers ## Prepare seed VM cluster
+seed-cluster-prepare: dnsmasq-workaround seed-varlibcontainers seed-lifecycle-agent-deploy ## Prepare seed VM cluster
 
 .PHONY: dnsmasq-workaround
 # dnsmasq workaround until https://github.com/openshift/assisted-service/pull/5658 is in assisted
@@ -144,8 +148,12 @@ recipient-vm-restore: VM_NAME=$(RECIPIENT_VM_NAME)
 recipient-vm-restore: VERSION=$(RECIPIENT_VERSION)
 recipient-vm-restore: vm-restore ## Restore a copy of recipient VM disk image (qcow2 file)
 
+.PHONY: recipient-lifecycle-agent-deploy
+recipient-lifecycle-agent-deploy: CLUSTER=$(RECIPIENT_VM_NAME)
+recipient-lifecycle-agent-deploy: lifecycle-agent-deploy
+
 .PHONY: recipient-cluster-prepare
-recipient-cluster-prepare: recipient-varlibcontainers oadp-deploy lifecycle-agent-deploy ## Prepare recipient VM cluster
+recipient-cluster-prepare: recipient-varlibcontainers oadp-deploy recipient-lifecycle-agent-deploy ## Prepare recipient VM cluster
 
 .PHONY: recipient-varlibcontainers
 recipient-varlibcontainers: CLUSTER=$(RECIPIENT_VM_NAME)

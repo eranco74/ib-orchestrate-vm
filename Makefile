@@ -229,7 +229,6 @@ credentials/backup-secret.json:
 	@echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
 .PHONY: lifecycle-agent-deploy
-lifecycle-agent-deploy: CLUSTER=$(RECIPIENT_VM_NAME)
 lifecycle-agent-deploy: lifecycle-agent
 	KUBECONFIG=../$(SNO_KUBECONFIG) make -C lifecycle-agent install deploy
 	@echo "Waiting for deployment lifecycle-agent-controller-manager to be available"; \

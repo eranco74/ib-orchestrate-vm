@@ -62,7 +62,7 @@ $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
 bootstrap-in-place-poc:
 	rm -rf $(SNO_DIR)
-	git clone https://github.com/eranco74/bootstrap-in-place-poc
+	git clone https://github.com/rh-ecosystem-edge/bip-orchestrate-vm
 
 .PHONY: lifecycle-agent
 lifecycle-agent:

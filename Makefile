@@ -2,7 +2,7 @@
 MAKEFLAGS += --no-builtin-rules
 
 IMAGE_BASED_DIR = .
-SNO_DIR = ./bootstrap-in-place-poc
+SNO_DIR = ./bip-orchestrate-vm
 
 ########################
 
@@ -60,7 +60,7 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
-bootstrap-in-place-poc:
+bip-orchestrate-vm:
 	rm -rf $(SNO_DIR)
 	git clone https://github.com/rh-ecosystem-edge/bip-orchestrate-vm
 
@@ -196,7 +196,7 @@ lca-logs: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-logs: ## Tail through LifeCycle Agent logs
 	$(oc) logs -f -c manager -n openshift-lifecycle-agent -l app.kubernetes.io/component=lifecycle-agent
 
-start-iso-abi: checkenv bootstrap-in-place-poc
+start-iso-abi: checkenv bip-orchestrate-vm
 	< agent-config-template.yaml \
 		VM_NAME=$(VM_NAME) \
 		HOST_IP=$(HOST_IP) \

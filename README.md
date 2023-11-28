@@ -85,7 +85,7 @@ make vdu
 
 - Prepare the seed cluster to have a couple of needed extras
 ```bash
-make dnsmasq-workaround seed-varlibcontainers
+make seed-cluster-prepare
 ```
 
 - Create a seed image from that SNO cluster
@@ -108,9 +108,9 @@ The steps will be as follow:
 make recipient-vm-create wait-for-recipient
 ```
 
-- Prepare the recipient cluster to use /var/lib/containers in a directory that can be shared among different deployments
+- Prepare the recipient cluster for a couple of extras (LCA operator, shared /var/lib/containers)
 ```bash
-make recipient-varlibcontainers
+make recipient-cluster-prepare
 ```
 
 - Restore the seed image
@@ -191,11 +191,11 @@ export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
 #### Creation of relocatable image
 - Create seed VM and image
 ```
-make seed-vm-create wait-for-seed vdu dnsmasq-workaround ostree-shared-containers seed-image-create SEED_IMAGE=$SEED_IMAGE
+make seed-vm-create wait-for-seed vdu seed-cluster-prepare seed-image-create SEED_IMAGE=$SEED_IMAGE
 ```
 - Create recipient SNO and restore seed image
 ```
-make recipient-vm-create wait-for-recipient ostree-shared-containers seed-image-restore SEED_IMAGE=$SEED_IMAGE
+make recipient-vm-create wait-for-recipient recipient-cluster-prepare seed-image-restore SEED_IMAGE=$SEED_IMAGE
 virsh reboot recipient
 ```
 

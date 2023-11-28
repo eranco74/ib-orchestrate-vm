@@ -4,6 +4,23 @@ single node OpenShift **
 
 Note that single node OpenShift relocation is currently unsupported.
 
+## TL;DR Full run with vDU profile
+- Define a few environment variables:
+```
+SEED_IMAGE=quay.io/whatever/ostbackup:seed
+export PULL_SECRET=$(jq -c . /path/to/my/pull-secret.json)
+export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
+```
+- Create seed VM and seed image
+```
+make seed-vm-create wait-for-seed vdu seed-cluster-prepare seed-image-create SEED_IMAGE=$SEED_IMAGE
+```
+- Create recipient VM and restore seed image
+```
+make recipient-vm-create wait-for-recipient recipient-cluster-prepare seed-image-restore SEED_IMAGE=$SEED_IMAGE
+virsh reboot recipient
+```
+
 ## Prerequisites
 
 - NMState v2.2.10 or above, this is required due to the nmstate config used in the agent-config.yaml
@@ -70,7 +87,7 @@ sudo authselect enable-feature with-libvirt
 
 This makes it so that libvirt guest names resolve to IP addresses
 
-## Procedure
+## How this works
 ### Generate the seed image template
 To generate a seed image we want to:
 - Provision a VM and install SNO in it
@@ -180,25 +197,6 @@ The use case for this is to easily precache all the images that the cluster in t
 It is important to note that for precaching to work, this change must be applied both in seed image and recipient cluster
 
 ## Examples
-### Full run with vDU profile
-#### Prerequisites
-Let's first define a few environment variables:
-```
-SEED_IMAGE=quay.io/whatever/ostbackup:seed
-export PULL_SECRET=$(jq -c . /path/to/my/pull-secret.json)
-export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
-```
-#### Creation of relocatable image
-- Create seed VM and image
-```
-make seed-vm-create wait-for-seed vdu seed-cluster-prepare seed-image-create SEED_IMAGE=$SEED_IMAGE
-```
-- Create recipient SNO and restore seed image
-```
-make recipient-vm-create wait-for-recipient recipient-cluster-prepare seed-image-restore SEED_IMAGE=$SEED_IMAGE
-virsh reboot recipient
-```
-
 ### Installing the backup into some running SNO
 ```
 make seed-image-restore SNO_KUBECONFIG=path/to/recipient/sno/kubeconfig SEED_IMAGE=$SEED_IMAGE

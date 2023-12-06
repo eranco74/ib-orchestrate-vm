@@ -240,7 +240,7 @@ lifecycle-agent-deploy: lifecycle-agent
 .PHONY: lca-stage-idle
 lca-stage-idle: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-stage-idle: credentials/backup-secret.json
-	$(oc) create secret generic seed-pull-secret -n default --from-file=.dockerconfigjson=credentials/backup-secret.json \
+	$(oc) create secret generic seed-pull-secret -n openshift-lifecycle-agent --from-file=.dockerconfigjson=credentials/backup-secret.json \
 		--type=kubernetes.io/dockerconfigjson --dry-run=client -oyaml \
 		| $(oc) apply -f -
 	SEED_VERSION=$(SEED_VERSION) SEED_IMAGE=$(SEED_IMAGE) envsubst < imagebasedupgrade.yaml | $(oc) apply -f -

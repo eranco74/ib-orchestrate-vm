@@ -248,27 +248,27 @@ lca-stage-idle: credentials/backup-secret.json
 .PHONY: lca-wait-for-idle
 lca-wait-for-idle: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-wait-for-idle:
-	$(oc) wait --timeout=30m --for=condition=Idle=true ibu -n default upgrade
+	$(oc) wait --timeout=30m --for=condition=Idle=true ibu upgrade
 
 .PHONY: lca-stage-prep
 lca-stage-prep: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-stage-prep:
-	$(oc) patch --type=json ibu -n default upgrade --type merge -p '{"spec": { "stage": "Prep"}}'
+	$(oc) patch --type=json ibu upgrade --type merge -p '{"spec": { "stage": "Prep"}}'
 
 .PHONY: lca-wait-for-prep
 lca-wait-for-prep: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-wait-for-prep:
-	$(oc) wait --timeout=30m --for=condition=PrepCompleted=true ibu -n default upgrade
+	$(oc) wait --timeout=30m --for=condition=PrepCompleted=true ibu upgrade
 
 .PHONY: lca-stage-upgrade
 lca-stage-upgrade: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-stage-upgrade:
-	$(oc) patch --type=json ibu -n default upgrade --type merge -p '{"spec": { "stage": "Upgrade"}}'
+	$(oc) patch --type=json ibu upgrade --type merge -p '{"spec": { "stage": "Upgrade"}}'
 
 .PHONY: lca-wait-for-upgrade
 lca-wait-for-upgrade: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-wait-for-upgrade:
-	$(oc) wait --timeout=30m --for=condition=UpgradeCompleted=true ibu -n default upgrade
+	$(oc) wait --timeout=30m --for=condition=UpgradeCompleted=true ibu upgrade
 
 .PHONY: ssh
 ssh: $(SSH_KEY_PRIV_PATH)

@@ -65,6 +65,10 @@ And finally restart systemd-resolved:
 sudo systemctl restart systemd-resolved
 ```
 
+Note that by default in this repo the cluster domain ends with `redhat.com`, so
+make sure you're not connected to the redhat VPN, otherwise `resolved` will
+prefer using the Red Hat DNS servers for any domain ending with `redhat.com`
+
 </details>
 
 ### If using authselect as nsswitch manager

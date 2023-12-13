@@ -87,9 +87,24 @@ sudo dnf install libvirt-nss
 sudo authselect enable-feature with-libvirt
 ```
 
+This makes it so that libvirt guest names resolve to IP addresses
+
 </details>
 
-This makes it so that libvirt guest names resolve to IP addresses
+### Libvirt no route to host issue
+
+<details>
+  <summary>Show more info</summary>
+
+Sometimes your libvirt bridge interface will not contain your VM's interfaces,
+which means you'll have a "no route to host" errors when trying to contact
+services on your VM.
+
+To fix this, install the `bridge-utils` package, run `brctl show`. If the `tt0`
+bridge has no `vnet*` interfaces listed, you'll need to add them with 
+`sudo brctl addif tt0 <vnet interface>`.
+
+</details>
 
 ## How this works
 ### Generate the seed image template

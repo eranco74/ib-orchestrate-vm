@@ -11,14 +11,21 @@ SEED_IMAGE=quay.io/whatever/ostbackup:seed
 export PULL_SECRET=$(jq -c . /path/to/my/pull-secret.json)
 export BACKUP_SECRET=$(jq -c . /path/to/my/repo/credentials.json)
 ```
-- Create seed VM and seed image
+- Create seed VM with vDU profile
 ```
-make seed-vm-create wait-for-seed vdu seed-cluster-prepare seed-image-create SEED_IMAGE=$SEED_IMAGE
+make seed vdu
 ```
-- Create recipient VM and restore seed image
+- Create and push seed image
 ```
-make recipient-vm-create wait-for-recipient recipient-cluster-prepare seed-image-restore SEED_IMAGE=$SEED_IMAGE
-virsh reboot recipient
+make sno-upgrade SEED_IMAGE=$SEED_IMAGE
+```
+- Create recipient VM
+```
+make recipient
+```
+- Restore seed image in recipient
+```
+make seed-image-restore SEED_IMAGE=$SEED_IMAGE
 ```
 
 ## Prerequisites
@@ -108,15 +115,19 @@ bridge has no `vnet*` interfaces listed, you'll need to add them with
 
 ## How this works
 ### Generate the seed image template
+This process can be done in a single step, or run each step separately to have more control
+#### Single step
+There is a makefile target that does all the steps for us
+```bash
+make seed
+```
+
+#### Step by step
+
 To generate a seed image we want to:
 - Provision a VM and install SNO in it
 ```bash
 make seed-vm-create wait-for-seed
-```
-
-- (OPTIONAL) Modify that installation to suit the use-case that we want to have in the seed image. In this example we install the components of a vDU profile
-```bash
-make vdu
 ```
 
 - Prepare the seed cluster to have a couple of needed extras
@@ -124,20 +135,31 @@ make vdu
 make seed-cluster-prepare
 ```
 
-- Create a seed image from that SNO cluster
+#### Customize seed SNO
+- (OPTIONAL) Modify that installation to suit the use-case that we want to have in the seed image. In this example we install the components of a vDU profile
 ```bash
-make seed-image-create SEED_IMAGE=quay.io/whatever/repo:tag
+make vdu
 ```
-This will run [ibu-imager](https://github.com/openshift-kni/lifecycle-agent/tree/main/ibu-imager) to create an OCI seed image
 
-> **WARNING**
-> Once we create a seed-image, some changes will be applied to seed VM that will "break" the node. If you intend on reusing that seed VM, it would be wise to create a backup using `make seed-vm-backup` that you can restore afterwards
+### Create a seed image using seed VM
+To restore a seed image we will use [LifeCycle Agent](https://github.com/openshift-kni/lifecycle-agent), and manage everything with the CR `SeedGenerator`
 
+This process will stop openshift and launch ibu-imager as a podman container, and afterwards restore the openshift cluster and update `SeedGenerator` CR
+```bash
+make sno-upgrade SEED_IMAGE=quay.io/whatever/repo:tag
+```
 
-### Restore seed image
-To restore a seed image we will use [LifeCycle Agent](https://github.com/openshift-kni/lifecycle-agent), and manage everything with the CR `ImageBasedUpgrade`
+### Create and prepare a recipient cluster
+As with the seed image, this process can be done in a single step, or run each step manually
 
-The steps will be as follow:
+#### Single step
+There is a makefile target that does all the steps for us
+```bash
+make recipient
+```
+
+#### Step by step
+Or we can choose to run each step manually, to have more control of each step
 
 - Provision a VM and install SNO in it
 ```bash
@@ -149,14 +171,10 @@ make recipient-vm-create wait-for-recipient
 make recipient-cluster-prepare
 ```
 
-- Restore the seed image
+### Restore seed image
+To restore a seed image we will use [LifeCycle Agent](https://github.com/openshift-kni/lifecycle-agent), and manage everything with the CR `ImageBasedUpgrade`
 ```bash
 make seed-image-restore SEED_IMAGE=quay.io/whatever/repo:tag
-```
-
-- Reboot into the new deployment
-```bash
-virsh reboot recipient
 ```
 
 ## Extra goodies
@@ -190,6 +208,7 @@ make recipient-vm-restore
 ```
 
 IMPORTANT: Remember that certificates expire, so if a backed up image is old, certificates will expire and openshift wont be usable
+
 TODO: Apply recert after restoring the image
 
 ### vDU profile

@@ -9,3 +9,4 @@ lifecycle-agent
 /config-dir/
 /credentials/
 /*.kubeconfig
+generate-dnsmasq-site-policy-section.sh

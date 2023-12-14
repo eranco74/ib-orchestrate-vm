@@ -127,6 +127,10 @@ seed-vm-restore: VM_NAME=$(SEED_VM_NAME)
 seed-vm-restore: VERSION=$(SEED_VERSION)
 seed-vm-restore: vm-restore ## Restore a copy of seed VM disk image (qcow2 file)
 
+.PHONY: seed-vm-recert
+seed-vm-recert: VM_NAME=$(SEED_VM_NAME)
+seed-vm-recert: vm-recert ## Run recert to extend certificates in seed VM
+
 .PHONY: seed-lifecycle-agent-deploy
 seed-lifecycle-agent-deploy: CLUSTER=$(SEED_VM_NAME)
 seed-lifecycle-agent-deploy: lifecycle-agent-deploy
@@ -174,6 +178,10 @@ recipient-ssh: ssh ## ssh into recipient VM
 recipient-vm-backup: VM_NAME=$(RECIPIENT_VM_NAME)
 recipient-vm-backup: VERSION=$(RECIPIENT_VERSION)
 recipient-vm-backup: vm-backup ## Make a copy of recipient VM disk image (qcow2 file)
+
+.PHONY: recipient-vm-recert
+recipient-vm-recert: VM_NAME=$(RECIPIENT_VM_NAME)
+recipient-vm-recert: vm-recert ## Run recert to extend certificates in recipient VM
 
 .PHONY: recipient-vm-restore
 recipient-vm-restore: VM_NAME=$(RECIPIENT_VM_NAME)
@@ -292,6 +300,8 @@ shared-varlibcontainers:
 
 .PHONY: vm-backup
 vm-backup:
+	scp $(SSH_FLAGS) recert_script.sh core@$(VM_NAME):/var/tmp
+	ssh $(SSH_FLAGS) core@$(VM_NAME) sudo /var/tmp/recert_script.sh backup
 	virsh shutdown $(VM_NAME)
 	@until virsh domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
 	cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2"
@@ -303,6 +313,18 @@ vm-restore:
 	@until virsh domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
 	cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2"
 	virsh start $(VM_NAME)
+
+.PHONY: vm-recert
+vm-recert: CLUSTER=$(VM_NAME)
+vm-recert:
+	echo "Waiting for $(VM_NAME) to start"
+	@until ssh $(SSH_FLAGS) core@$(VM_NAME) true; do sleep 5; echo -n .; done
+	ssh $(SSH_FLAGS) core@$(VM_NAME) sudo /var/tmp/recert_script.sh recert
+	echo "Waiting for openshift to start"
+	@until [ "$$($(oc) get clusterversion -o jsonpath='{.items[*].status.conditions[?(@.type=="Available")].status}')" == "True" ]; do \
+			echo -n .; sleep 10; \
+	done; \
+	echo " DONE"
 
 .PHONY: help
 help:

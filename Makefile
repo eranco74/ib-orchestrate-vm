@@ -14,9 +14,10 @@ ifndef PULL_SECRET
 	$(error PULL_SECRET must be defined)
 endif
 
+CLUSTER_DOMAIN ?= redhat.com
 SEED_VM_NAME  ?= seed
 SEED_VM_IP  ?= 192.168.126.10
-SEED_VERSION ?= 4.13.5
+SEED_VERSION ?= 4.14.6
 SEED_MAC ?= 52:54:00:ee:42:e1
 
 RECIPIENT_VM_NAME ?= recipient
@@ -72,6 +73,33 @@ lifecycle-agent:
 		git clone https://github.com/openshift-kni/lifecycle-agent ;\
 	fi
 
+## VM provision in a single step
+.PHONY: seed
+seed: seed-vm-create wait-for-seed seed-cluster-prepare ## Provision and prepare seed VM
+
+.PHONY: recipient
+recipient: recipient-vm-create wait-for-recipient recipient-cluster-prepare ## Provision and prepare recipient VM
+
+## Seed image management
+.PHONY: seed-image-create
+seed-image-create: CLUSTER=$(SEED_VM_NAME)
+seed-image-create: ## Create seed image		make seed-image-create SEED_IMAGE=quay.io/whatever/ostmagic:seed
+	@< seedgenerator.yaml \
+		SEED_AUTH=$(shell echo '$(BACKUP_SECRET)' | base64 -w0) \
+		SEED_IMAGE=$(SEED_IMAGE) \
+		envsubst | \
+		  $(oc) apply -f -
+	@echo "Waiting for seed image to be completed"; \
+	until $(oc) wait --timeout 30m seedgenerator seedimage --for=condition=SeedGenCompleted=true; do \
+		echo -n .;\
+		sleep 15; \
+	done; echo
+
+.PHONY: sno-upgrade
+sno-upgrade: CLUSTER=$(RECIPIENT_VM_NAME)
+sno-upgrade: lca-stage-idle lca-stage-prep lca-wait-for-prep lca-stage-upgrade lca-wait-for-upgrade ## Upgrade using seed image		make sno-upgrade SEED_IMAGE=quay.io/whatever/ostmagic:seed SEED_VERSION=4.13.5
+	@echo "Seed image restoration process complete"
+
 ## Seed VM management
 
 .PHONY: seed-vm-create
@@ -106,12 +134,16 @@ seed-lifecycle-agent-deploy: lifecycle-agent-deploy
 .PHONY: seed-cluster-prepare
 seed-cluster-prepare: dnsmasq-workaround seed-varlibcontainers seed-lifecycle-agent-deploy ## Prepare seed VM cluster
 
+generate-dnsmasq-site-policy-section.sh:
+	curl -sOL https://raw.githubusercontent.com/openshift-kni/lifecycle-agent/main/hack/generate-dnsmasq-site-policy-section.sh
+	chmod +x $@
+
 .PHONY: dnsmasq-workaround
 # dnsmasq workaround until https://github.com/openshift/assisted-service/pull/5658 is in assisted
 dnsmasq-workaround: SEED_CLUSTER_NAME ?= $(SEED_VM_NAME).redhat.com
 dnsmasq-workaround: CLUSTER=$(SEED_VM_NAME)
-dnsmasq-workaround:
-	./generate-dnsmasq-machineconfig.sh --name $(SEED_CLUSTER_NAME) --ip $(SEED_VM_IP) | $(oc) apply -f -
+dnsmasq-workaround: generate-dnsmasq-site-policy-section.sh
+	./generate-dnsmasq-site-policy-section.sh --name $(SEED_VM_NAME) --domain $(CLUSTER_DOMAIN) --ip $(SEED_VM_IP) --mc | $(oc) apply -f -
 
 .PHONY: seed-varlibcontainers
 seed-varlibcontainers: CLUSTER=$(SEED_VM_NAME)
@@ -169,35 +201,14 @@ oadp-deploy:
 		sleep 5; \
 	done; echo
 
-## Seed creation
-.PHONY: seed-image-create
-seed-image-create: credentials/backup-secret.json ## Create seed image using ibu-imager		make seed-image SEED_IMAGE=quay.io/whatever/ostmagic:seed
-	scp $(SSH_FLAGS) credentials/backup-secret.json core@$(SEED_VM_NAME):/tmp
-	ssh $(SSH_FLAGS) core@$(SEED_VM_NAME) sudo podman run --privileged --rm --pid=host --net=host \
-		-v /var:/var \
-		-v /var/run:/var/run \
-		-v /etc:/etc \
-		-v /run/systemd/journal/socket:/run/systemd/journal/socket \
-		-v /tmp/backup-secret.json:/tmp/backup-secret.json \
-		--entrypoint ibu-imager \
-		$(LCA_IMAGE) \
-			create --authfile /tmp/backup-secret.json --image $(SEED_IMAGE)
-
-
-## Seed restoring
-.PHONY: seed-image-restore
-seed-image-restore: CLUSTER=$(RECIPIENT_VM_NAME)
-seed-image-restore: lca-stage-idle lca-wait-for-idle lca-stage-prep lca-wait-for-prep lca-stage-upgrade lca-wait-for-upgrade ## Restore seed image				make lca-seed-restore SEED_IMAGE=quay.io/whatever/ostmagic:seed SEED_VERSION=4.13.5
-	@echo "Seed image restoration process complete"
-	@echo "Reboot SNO to finish the upgrade process"
-
+## Extra
 .PHONY: lca-logs
 lca-logs: CLUSTER=$(RECIPIENT_VM_NAME)
-lca-logs: ## Tail through LifeCycle Agent logs
+lca-logs: ## Tail through LifeCycle Agent logs	make lca-logs CLUSTER=seed
 	$(oc) logs -f -c manager -n openshift-lifecycle-agent -l app.kubernetes.io/component=lifecycle-agent
 
 start-iso-abi: checkenv bip-orchestrate-vm
-	< agent-config-template.yaml \
+	@< agent-config-template.yaml \
 		VM_NAME=$(VM_NAME) \
 		HOST_IP=$(HOST_IP) \
 		HOST_MAC=$(MAC_ADDRESS) \
@@ -244,11 +255,6 @@ lca-stage-idle: credentials/backup-secret.json
 		--type=kubernetes.io/dockerconfigjson --dry-run=client -oyaml \
 		| $(oc) apply -f -
 	SEED_VERSION=$(SEED_VERSION) SEED_IMAGE=$(SEED_IMAGE) envsubst < imagebasedupgrade.yaml | $(oc) apply -f -
-
-.PHONY: lca-wait-for-idle
-lca-wait-for-idle: CLUSTER=$(RECIPIENT_VM_NAME)
-lca-wait-for-idle:
-	$(oc) wait --timeout=30m --for=condition=Idle=true ibu upgrade
 
 .PHONY: lca-stage-prep
 lca-stage-prep: CLUSTER=$(RECIPIENT_VM_NAME)

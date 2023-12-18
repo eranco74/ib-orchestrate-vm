@@ -214,10 +214,15 @@ or
 make recipient-vm-restore
 ```
 
-IMPORTANT: Remember that certificates expire, so if a backed up image is old, certificates will expire and openshift wont be usable
-
-TODO: Apply recert after restoring the image
-
+Remember that certificates expire, so if a backed up image is old, certificates will expire and openshift wont be usable
+If certs have expired, you can run recert to issue new certificates:
+```bash
+make seed-vm-recert
+```
+or
+```bash
+make recipient-vm-recert
+```
 ### vDU profile
 A vDU profile can be applied to the image before baking with
 ```bash

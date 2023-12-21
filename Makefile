@@ -14,6 +14,9 @@ ifndef PULL_SECRET
 	$(error PULL_SECRET must be defined)
 endif
 
+VIRSH_CONNECT ?= qemu:///system
+virsh = virsh --connect=$(VIRSH_CONNECT)
+
 CLUSTER_DOMAIN ?= redhat.com
 SEED_VM_NAME  ?= seed
 SEED_VM_IP  ?= 192.168.126.10
@@ -302,17 +305,17 @@ shared-varlibcontainers:
 vm-backup:
 	scp $(SSH_FLAGS) recert_script.sh core@$(VM_NAME):/var/tmp
 	ssh $(SSH_FLAGS) core@$(VM_NAME) sudo /var/tmp/recert_script.sh backup
-	virsh shutdown $(VM_NAME)
-	@until virsh domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
-	cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2"
-	virsh start $(VM_NAME)
+	$(virsh) shutdown $(VM_NAME)
+	@until $(virsh) domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	sudo cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2"
+	$(virsh) start $(VM_NAME)
 
 .PHONY: vm-restore
 vm-restore:
-	-virsh destroy $(VM_NAME)
-	@until virsh domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
-	cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2"
-	virsh start $(VM_NAME)
+	-$(virsh) destroy $(VM_NAME)
+	@until $(virsh) domstate $(VM_NAME) | grep -qx 'shut off' ; do echo -n . ; sleep 5; done; echo
+	sudo cp "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME)-$(VERSION)-backup.qcow2" "$(LIBVIRT_IMAGE_PATH)/$(VM_NAME).qcow2"
+	$(virsh) start $(VM_NAME)
 
 .PHONY: vm-recert
 vm-recert: CLUSTER=$(VM_NAME)

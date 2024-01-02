@@ -4,7 +4,7 @@ MAKEFLAGS += --no-builtin-rules
 IMAGE_BASED_DIR = .
 SNO_DIR = ./bip-orchestrate-vm
 
-########################
+-include .config-override
 
 default: help
 

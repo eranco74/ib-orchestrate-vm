@@ -10,3 +10,4 @@ lifecycle-agent
 /credentials/
 /*.kubeconfig
 generate-dnsmasq-site-policy-section.sh
+.config-override

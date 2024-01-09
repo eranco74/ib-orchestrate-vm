@@ -17,11 +17,6 @@ storage:
       overwrite: true
       contents:
         local: credentials/pull-secret.json
-    - path: /usr/local/bin/ostree-restore.sh
-      mode: 0755
-      overwrite: true
-      contents:
-        local: ibi/ostree-restore.sh
     - path: /usr/local/bin/install-rhcos-and-restore-seed.sh
       mode: 0755
       overwrite: true
@@ -36,6 +31,8 @@ systemd:
         Description=SNO Image Based Installation
         [Service]
         Environment=SEED_IMAGE=${SEED_IMAGE}
+        Environment=SEED_VERSION=${SEED_VERSION}
+        Environment=LCA_IMAGE=${LCA_IMAGE}
         Environment=INSTALLATION_DISK=${INSTALLATION_DISK}
         Type=oneshot
         RemainAfterExit=yes

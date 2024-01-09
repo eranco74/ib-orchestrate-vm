@@ -3,7 +3,12 @@
 set -e # Halt on error
 
 seed_image=${1:-$SEED_IMAGE}
-installation_disk=${2:-$INSTALLATION_DISK}
+seed_version=${2:-$SEED_VERSION}
+installation_disk=${3:-$INSTALLATION_DISK}
+lca_image=${4:-$LCA_IMAGE}
+
+authfile=${AUTH_FILE:-"/var/tmp/backup-secret.json"}
+pull_secret=${PULL_SECRET_FILE:-"/var/tmp/pull-secret.json"}
 
 coreos-installer install ${installation_disk}
 
@@ -13,7 +18,7 @@ mount ${installation_disk}4 /mnt
 mount ${installation_disk}3 /mnt/boot
 xfs_growfs ${installation_disk}4
 
-# Creating shared /var/lib/containers and configuring local crio to use it
+# Creating and mounting shared /var/lib/containers
 if lsattr -d /mnt/ | cut -d ' ' -f 1 | grep i; then
     chattr -i /mnt/
     mkdir -p /mnt/sysroot/containers
@@ -23,14 +28,4 @@ else
 fi
 mount -o bind /mnt/sysroot/containers /var/lib/containers
 
-# Configure CRIO to use our local pull secret
-mkdir -p /etc/crio/crio.conf.d
-cat << EOF > /etc/crio/crio.conf.d/auth
-[crio.image]
-global_auth_file = "/var/tmp/pull-secret.json"
-EOF
-
-systemctl start crio
-
-# To be changed when ibi-seed-install binary is created
-/usr/local/bin/ostree-restore.sh $seed_image
+podman run --privileged --rm --pid=host --authfile "${authfile}" -v /:/host --entrypoint /usr/local/bin/ibu-imager "${lca_image}" ibi --seed-image "${seed_image}" --authfile "${authfile}" --seed-version "${seed_version}" --pullSecretFile "${pull_secret}"

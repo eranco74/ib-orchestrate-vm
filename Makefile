@@ -250,6 +250,12 @@ credentials/backup-secret.json:
 	@mkdir -p credentials
 	@echo '$(BACKUP_SECRET)' > credentials/backup-secret.json
 
+.PHONY: credentials/pull-secret.json
+credentials/pull-secret.json:
+	@test '$(PULL_SECRET)' || { echo "PULL_SECRET must be defined"; exit 1; }
+	@mkdir -p credentials
+	@echo '$(PULL_SECRET)' > credentials/pull-secret.json
+
 .PHONY: lifecycle-agent-deploy
 lifecycle-agent-deploy: lifecycle-agent
 	KUBECONFIG=../$(SNO_KUBECONFIG) make -C lifecycle-agent install deploy
@@ -339,3 +345,4 @@ help:
 		}\
 	' $(MAKEFILE_LIST)
 
+include Makefile.ibi

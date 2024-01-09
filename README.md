@@ -1,8 +1,9 @@
 # SNO seed image creation and restoration using Image Base Upgrade (IBU)
-Note that this repo is just a proof-of-concept. This repo is for debugging / experimenting with
-single node OpenShift **
+Note that this repo is just a proof-of-concept. This repo is for debugging / experimenting with single node OpenShift **
 
 Note that single node OpenShift relocation is currently unsupported.
+
+In this README we will cover only IBU, for Image Based Installation check [IBI's README](README.ibi.md)
 
 ## TL;DR Full run with vDU profile
 - Define a few environment variables:

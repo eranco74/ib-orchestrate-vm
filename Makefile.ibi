@@ -1,0 +1,109 @@
+## Image Based Installation
+IBI_VM_NAME = ibi
+IBI_VM_MAC = fa:ba:da:1b:11:b1
+IBI_VM_MEMORY = 32Gb
+IBI_VM_CPUS = 16
+IBI_DISK_SIZE = 120
+IBI_DOMAIN ?= example.com
+IBI_CLUSTER_NAME ?= other-test-sno
+IBI_HOSTNAME ?= $(IBI_VM_NAME)
+
+COREOS_INSTALLER = quay.io/coreos/coreos-installer:latest
+RHCOS_LIVE_ISO_URL = https://mirror.openshift.com/pub/openshift-v4/amd64/dependencies/rhcos/latest/rhcos-live.x86_64.iso
+RHCOS_LIVE_ISO = rhcos-live.x86_64.iso
+
+SSH_PUBLIC_KEY = $(HOME)/.ssh/id_rsa.pub
+IBI_RHCOS_ISO_PATH = $(LIBVIRT_IMAGE_PATH)/rhcos-$(IBI_VM_NAME).iso
+IBI_CONFIG_DIR = ibi-config
+IBI_CLUSTER_CONFIG_TEMPLATE = ibi-manifest.template
+IBI_CLUSTER_CONFIG_PATH = $(IBI_CONFIG_DIR)/cluster-configuration/manifest.json
+IBI_CLUSTER_CONFIG_MANIFESTS = $(IBI_CONFIG_DIR)/cluster-configuration/manifests
+
+# Use kcli - TODO: Use virsh or similar
+LIBVIRT_POOL = default
+KCLI_IMAGE = quay.io/karmab/kcli
+kcli = podman run --net host -i --rm --security-opt label=disable -v $(LIBVIRT_IMAGE_PATH):$(LIBVIRT_IMAGE_PATH) -v $(HOME)/.ssh:/root/.ssh -v $(HOME)/.kcli:/root/.kcli -v /var/run/libvirt:/var/run/libvirt $(KCLI_IMAGE)
+
+$(RHCOS_LIVE_ISO):
+	curl -L $(RHCOS_LIVE_ISO_URL) > $@
+
+.PHONY: ibi-ignition.json
+ibi-ignition.json: credentials/pull-secret.json credentials/backup-secret.json
+	SSH_PUBLIC_KEY="$(shell cat $(SSH_KEY_PUB_PATH))" \
+	SEED_IMAGE="$(SEED_IMAGE)" \
+	  envsubst < ibi-butane-ignition.yaml | \
+		podman run -i -v $(shell pwd):/data/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /data > $@
+
+.PHONY: ibi-iso
+ibi-iso: $(RHCOS_LIVE_ISO) ibi-ignition.json ## Embed ignition into live ISO
+	-rm -f rhcos-ibi.iso
+	podman run -v $(shell pwd):/data:rw,Z $(COREOS_INSTALLER) iso ignition embed -i /data/ibi-ignition.json -o /data/rhcos-ibi.iso /data/$(RHCOS_LIVE_ISO)
+	cp rhcos-ibi.iso "$(IBI_RHCOS_ISO_PATH)"
+	chmod a+r "$(IBI_RHCOS_ISO_PATH)"
+
+.PHONY: ibi-iso-clean
+ibi-iso-clean: ## Delete ISO
+	-rm -f $(IBI_RHCOS_ISO_PATH) $(RHCOS_LIVE_ISO)
+
+.PHONY: ibi-vm
+ibi-vm: ## Provision IBI VM
+	# TODO: use virsh or similar
+	-mkdir -p $(HOME)/.kcli
+	@$(kcli) create vm \
+		-P iso="$(IBI_RHCOS_ISO_PATH)" \
+		-P memory=$(IBI_VM_MEMORY) \
+		-P numcpus=$(IBI_VM_CPUS) \
+		-P disks=['{"size": $(IBI_DISK_SIZE), "pool": "$(LIBVIRT_POOL)"}'] \
+		-P nets=['{"name": "default", "mac": "$(IBI_VM_MAC)"}'] \
+		$(IBI_VM_NAME)
+
+.PHONY: vm-clean
+ibi-vm-clean: ## Delete VM
+	-@$(kcli) delete vm -y $(IBI_VM_NAME)
+
+.PHONY: logs
+ibi-logs: ## Show logs of the IBI installation process
+	echo "Waiting for $(IBI_VM_NAME) to be accessible"
+	@until ssh core@$(IBI_VM_NAME) true; do sleep 5; echo -n .; done; echo
+	ssh core@$(IBI_VM_NAME) sudo journalctl -flu install-rhcos-and-restore-seed.service
+
+.PHONY: ibi-certs
+ibi-certs:
+	@echo "Generating new certificates"
+	rm -rf ./ibi-certs ./kubeconfig.ibi
+	./ibi/generate_certs.sh $(IBI_CLUSTER_NAME) $(IBI_DOMAIN)
+
+.PHONY: $(IBI_CLUSTER_CONFIG_PATH)
+$(IBI_CLUSTER_CONFIG_PATH):
+	mkdir -p $(shell dirname $(IBI_CLUSTER_CONFIG_PATH))
+	rm -rf $@
+	MASTER_IP=$(shell virsh domifaddr ${IBI_VM_NAME} | grep ipv4 | awk -F " " '{print $$4}' | cut -d'/' -f1) \
+	CLUSTER_ID=$(shell uuidgen) \
+	VM_NAME=$(IBI_VM_NAME) \
+	CLUSTER_NAME=$(IBI_CLUSTER_NAME) \
+	DOMAIN=$(IBI_DOMAIN) \
+	HOSTNAME=$(IBI_HOSTNAME) \
+	envsubst < $(IBI_CLUSTER_CONFIG_TEMPLATE) > $@
+
+.PHONY: $(IBI_CLUSTER_CONFIG_MANIFESTS)
+$(IBI_CLUSTER_CONFIG_MANIFESTS):
+	mkdir -p $(IBI_CLUSTER_CONFIG_MANIFESTS)
+
+.PHONY: ibi-config
+ibi-config: $(IBI_CLUSTER_CONFIG_PATH) $(IBI_CLUSTER_CONFIG_MANIFESTS)
+
+.PHONY: ibi-config.iso
+ibi-config.iso: ibi-certs ibi-config ## Create ibi-config.iso
+	mkisofs -o $@ -R -V "relocation-config" $(IBI_CONFIG_DIR)
+	cp $@ $(LIBVIRT_IMAGE_PATH)
+
+.PHONY: ibi-attach-config.iso
+ibi-attach-config.iso: ## Attach ibi-config.iso file to IBI VM
+	virsh change-media $(IBI_VM_NAME) hdc $(LIBVIRT_IMAGE_PATH)/ibi-config.iso
+
+.PHONY: ibi-reboot
+ibi-reboot: ## Reboot ibi VM
+	virsh reboot $(IBI_VM_NAME)
+
+# So vim treats this file as a makefile
+# vim: set filetype=make:

@@ -3,7 +3,7 @@
 set -e # Halt on error
 
 seed_image=${1:-$SEED_IMAGE}
-installation_disk=${2:-/dev/vda}
+installation_disk=${2:-$INSTALLATION_DISK}
 
 coreos-installer install ${installation_disk}
 

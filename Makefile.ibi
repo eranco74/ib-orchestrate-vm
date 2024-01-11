@@ -7,6 +7,7 @@ IBI_DISK_SIZE = 120
 IBI_DOMAIN ?= example.com
 IBI_CLUSTER_NAME ?= other-test-sno
 IBI_HOSTNAME ?= $(IBI_VM_NAME)
+IBI_INSTALLATION_DISK ?= /dev/vda
 
 COREOS_INSTALLER = quay.io/coreos/coreos-installer:latest
 RHCOS_LIVE_ISO_URL = https://mirror.openshift.com/pub/openshift-v4/amd64/dependencies/rhcos/latest/rhcos-live.x86_64.iso
@@ -31,6 +32,7 @@ $(RHCOS_LIVE_ISO):
 ibi-ignition.json: credentials/pull-secret.json credentials/backup-secret.json
 	SSH_PUBLIC_KEY="$(shell cat $(SSH_KEY_PUB_PATH))" \
 	SEED_IMAGE="$(SEED_IMAGE)" \
+	INSTALLATION_DISK="$(IBI_INSTALLATION_DISK)" \
 	  envsubst < ibi-butane-ignition.yaml | \
 		podman run -i -v $(shell pwd):/data/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /data > $@
 

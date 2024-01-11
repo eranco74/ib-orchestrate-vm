@@ -36,6 +36,7 @@ systemd:
         Description=SNO Image Based Installation
         [Service]
         Environment=SEED_IMAGE=${SEED_IMAGE}
+        Environment=INSTALLATION_DISK=${INSTALLATION_DISK}
         Type=oneshot
         RemainAfterExit=yes
         ExecStart=/usr/local/bin/install-rhcos-and-restore-seed.sh

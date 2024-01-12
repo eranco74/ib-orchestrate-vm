@@ -113,7 +113,7 @@ seed-vm-create: MAC_ADDRESS=$(SEED_MAC)
 seed-vm-create: start-iso-abi ## Install seed SNO cluster
 
 .PHONY: wait-for-seed
-wait-for-seed: CLUSTER=seed
+wait-for-seed: CLUSTER=$(SEED_VM_NAME)
 wait-for-seed: wait-for-install-complete ## Wait for seed cluster to complete installation
 
 .PHONY: seed-ssh
@@ -170,7 +170,7 @@ recipient-vm-create: MAC_ADDRESS=$(RECIPIENT_MAC)
 recipient-vm-create: start-iso-abi ## Install recipient SNO cluster
 
 .PHONY: wait-for-recipient
-wait-for-recipient: CLUSTER=recipient
+wait-for-recipient: CLUSTER=$(RECIPIENT_VM_NAME)
 wait-for-recipient: wait-for-install-complete ## Wait for recipient cluster to complete installation
 
 .PHONY: recipient-ssh

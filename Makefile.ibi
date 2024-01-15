@@ -9,6 +9,7 @@ IBI_CLUSTER_NAME ?= other-test-sno
 IBI_HOSTNAME ?= $(IBI_VM_NAME)
 IBI_INSTALLATION_DISK ?= /dev/vda
 
+LCA_IMAGE ?= quay.io/openshift-kni/lifecycle-agent-operator:4.14.0
 COREOS_INSTALLER = quay.io/coreos/coreos-installer:latest
 RHCOS_LIVE_ISO_URL = https://mirror.openshift.com/pub/openshift-v4/amd64/dependencies/rhcos/latest/rhcos-live.x86_64.iso
 RHCOS_LIVE_ISO = rhcos-live.x86_64.iso
@@ -32,6 +33,8 @@ $(RHCOS_LIVE_ISO):
 ibi-ignition.json: credentials/pull-secret.json credentials/backup-secret.json
 	SSH_PUBLIC_KEY="$(shell cat $(SSH_KEY_PUB_PATH))" \
 	SEED_IMAGE="$(SEED_IMAGE)" \
+	SEED_VERSION="$(SEED_VERSION)" \
+	LCA_IMAGE="$(LCA_IMAGE)" \
 	INSTALLATION_DISK="$(IBI_INSTALLATION_DISK)" \
 	  envsubst < ibi-butane-ignition.yaml | \
 		podman run -i -v $(shell pwd):/data/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /data > $@
@@ -49,9 +52,8 @@ ibi-iso-clean: ## Delete ISO
 
 .PHONY: ibi-vm
 ibi-vm: ## Provision IBI VM
-	# TODO: use virsh or similar
-	-mkdir -p $(HOME)/.kcli
-	@$(kcli) create vm \
+	@-mkdir -p $(HOME)/.kcli
+	$(kcli) create vm \
 		-P iso="$(IBI_RHCOS_ISO_PATH)" \
 		-P memory=$(IBI_VM_MEMORY) \
 		-P numcpus=$(IBI_VM_CPUS) \
@@ -66,8 +68,8 @@ ibi-vm-clean: ## Delete VM
 .PHONY: logs
 ibi-logs: ## Show logs of the IBI installation process
 	echo "Waiting for $(IBI_VM_NAME) to be accessible"
-	@until ssh core@$(IBI_VM_NAME) true; do sleep 5; echo -n .; done; echo
-	ssh core@$(IBI_VM_NAME) sudo journalctl -flu install-rhcos-and-restore-seed.service
+	@until ssh $(SSH_FLAGS) core@$(IBI_VM_NAME) true; do sleep 5; echo -n .; done; echo
+	ssh $(SSH_FLAGS) core@$(IBI_VM_NAME) sudo journalctl -flu install-rhcos-and-restore-seed.service
 
 .PHONY: ibi-certs
 ibi-certs:
@@ -106,6 +108,11 @@ ibi-attach-config.iso: ## Attach ibi-config.iso file to IBI VM
 .PHONY: ibi-reboot
 ibi-reboot: ## Reboot ibi VM
 	virsh reboot $(IBI_VM_NAME)
+
+# Delete generated files
+.PHONY: ibi-clean
+ibi-clean: ibi-vm-clean
+	rm -fr credentials ibi-certs ibi-config/certs ibi-config.iso ibi-config/cluster-configuration/manifest.json kubeconfig.ibi ibi-ignition.json rhcos-ibi.iso rhcos-live.x86_64.iso
 
 # So vim treats this file as a makefile
 # vim: set filetype=make:

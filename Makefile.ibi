@@ -8,8 +8,8 @@ IBI_DOMAIN ?= example.com
 IBI_CLUSTER_NAME ?= other-test-sno
 IBI_HOSTNAME ?= $(IBI_VM_NAME)
 IBI_INSTALLATION_DISK ?= /dev/vda
-NET_NAME ?= default
 IBI_WORK_DIR ?= ibi-iso-work-dir
+
 LCA_IMAGE ?= quay.io/openshift-kni/lifecycle-agent-operator:4.14.0
 COREOS_INSTALLER = quay.io/coreos/coreos-installer:latest
 IB_CLI = ./bin/ib-cli
@@ -21,6 +21,7 @@ IBI_CONFIG_DIR = ibi-config
 IBI_CLUSTER_CONFIG_TEMPLATE = ibi-manifest.template
 IBI_CLUSTER_CONFIG_PATH = $(IBI_CONFIG_DIR)/cluster-configuration/manifest.json
 IBI_CLUSTER_CONFIG_MANIFESTS = $(IBI_CONFIG_DIR)/cluster-configuration/manifests
+NET_NAME = $(NET_1_NAME)
 
 # Use kcli - TODO: Use virsh or similar
 LIBVIRT_POOL = default

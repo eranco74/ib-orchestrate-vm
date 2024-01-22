@@ -58,9 +58,6 @@ openssl req -new -key "${CERT_DIR}/${USER_NAME}-key.pem" -out "${CERT_DIR}/${USE
 # Sign the user's CSR with the CA
 openssl x509 -req -in "${CERT_DIR}/${USER_NAME}-csr.pem" -CA "${CERT_DIR}/${CA_NAME}.crt" -CAkey "${CERT_DIR}/${CA_NAME}-key.pem" -CAcreateserial -out "${CERT_DIR}/${USER_NAME}-crt.pem" -days 365
 
-# Copy the CA certificate used to sign the system:admin-crt.pem into config/certs as the admin-kubeconfig-client-ca.crt
-cp "${CERT_DIR}/${CA_NAME}.crt" ${CONFIG_CERT_DIR}/admin-kubeconfig-client-ca.crt
-
 # Function to generate keys and self-signed certificates
 generate_self_signed_certs() {
     local SIGNER_NAME="$1"
@@ -74,8 +71,6 @@ generate_self_signed_certs() {
     # Self-sign the CSR to generate the CA certificate
     openssl x509 -req -in "${CERT_DIR}/${SIGNER_NAME}-csr.pem" -signkey "${CERT_DIR}/${SIGNER_NAME}-key.pem" -out "${CERT_DIR}/${SIGNER_NAME}.crt" -days 365 -extensions v3_req  -extfile "$config_file"
 
-    # Copy the signer key to the certs dir under the config directory
-    cp "${CERT_DIR}/${SIGNER_NAME}-key.pem" ${CONFIG_CERT_DIR}/${SIGNER_NAME}.key
 }
 
 # Generate serving-signer certificates

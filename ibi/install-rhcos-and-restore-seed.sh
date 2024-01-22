@@ -28,4 +28,4 @@ else
 fi
 mount -o bind /mnt/sysroot/containers /var/lib/containers
 
-podman run --privileged --rm --pid=host --authfile "${authfile}" -v /:/host --entrypoint /usr/local/bin/ibu-imager "${lca_image}" ibi --seed-image "${seed_image}" --authfile "${authfile}" --seed-version "${seed_version}" --pullSecretFile "${pull_secret}"
+podman run --privileged --rm --pid=host --authfile "${authfile}" -v /:/host --entrypoint /usr/local/bin/lca-cli "${lca_image}" ibi --seed-image "${seed_image}" --authfile "${authfile}" --seed-version "${seed_version}" --pullSecretFile "${pull_secret}"

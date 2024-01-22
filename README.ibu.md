@@ -138,7 +138,7 @@ make vdu
 ### Create a seed image using seed VM
 To create a seed image we will use [LifeCycle Agent](https://github.com/openshift-kni/lifecycle-agent), and manage everything with the CR `SeedGenerator`
 
-This process will stop openshift and launch ibu-imager as a podman container, and afterwards restore the openshift cluster and update `SeedGenerator` CR
+This process will stop openshift and launch lca-cli as a podman container, and afterwards restore the openshift cluster and update `SeedGenerator` CR
 ```bash
 make seed-image-create SEED_IMAGE=quay.io/whatever/repo:tag
 ```

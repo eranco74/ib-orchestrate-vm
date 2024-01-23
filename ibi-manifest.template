@@ -1,2 +1,24 @@
-{"version":"4.14.5","domain":"${DOMAIN}","cluster_name":"${CLUSTER_NAME}","cluster_id":"${CLUSTER_ID}","master_ip":"${MASTER_IP}","release_registry":"quay.io","hostname":"${HOSTNAME}"}
-
+{
+  "api_version": 1,
+  "base_domain": "${DOMAIN}",
+  "cluster_name": "${CLUSTER_NAME}",
+  "cluster_id": "${CLUSTER_ID}",
+  "node_ip": "${NODE_IP}",
+  "release_registry": "quay.io",
+  "hostname": "${HOSTNAME}",
+  "KubeconfigCryptoRetention": {
+    "KubeAPICrypto": {
+      "ServingCrypto": {
+        "localhost_signer_private_key": "${LOCALHOST_SIGNER_PRIVATE_KEY}",
+        "service_network_signer_private_key": "${SERVICE_NETWORK_SIGNER_PRIVATE_KEY}",
+        "loadbalancer_external_signer_private_key": "${LOADBALANCER_SIGNER_PRIVATE_KEY}"
+      },
+      "ClientAuthCrypto": {
+        "admin_ca_certificate": "${ADMIN_CA_CERT}"
+      }
+    },
+    "IngresssCrypto": {
+      "ingress_ca": "${INGRESS_CA_KEY}"
+    }
+  }
+}

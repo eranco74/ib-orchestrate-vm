@@ -78,15 +78,21 @@ ibi-certs:
 	./ibi/generate_certs.sh $(IBI_CLUSTER_NAME) $(IBI_DOMAIN)
 
 .PHONY: $(IBI_CLUSTER_CONFIG_PATH)
-$(IBI_CLUSTER_CONFIG_PATH):
+$(IBI_CLUSTER_CONFIG_PATH): ibi-certs
 	mkdir -p $(shell dirname $(IBI_CLUSTER_CONFIG_PATH))
 	rm -rf $@
-	MASTER_IP=$(shell virsh domifaddr ${IBI_VM_NAME} | grep ipv4 | awk -F " " '{print $$4}' | cut -d'/' -f1) \
+	NODE_IP=$(shell virsh domifaddr ${IBI_VM_NAME} | grep ipv4 | awk -F " " '{print $$4}' | cut -d'/' -f1) \
 	CLUSTER_ID=$(shell uuidgen) \
 	VM_NAME=$(IBI_VM_NAME) \
+	SEED_VERSION=$(SEED_VERSION) \
 	CLUSTER_NAME=$(IBI_CLUSTER_NAME) \
 	DOMAIN=$(IBI_DOMAIN) \
 	HOSTNAME=$(IBI_HOSTNAME) \
+	LOCALHOST_SIGNER_PRIVATE_KEY="$(shell awk 'NF {sub(/\r/, ""); printf "%s\\n",$$0;}' ibi-certs/localhost-serving-signer-key.pem)" \
+	SERVICE_NETWORK_SIGNER_PRIVATE_KEY="$(shell awk 'NF {sub(/\r/, ""); printf "%s\\n",$$0;}' ibi-certs/service-network-serving-signer-key.pem)" \
+	LOADBALANCER_SIGNER_PRIVATE_KEY="$(shell awk 'NF {sub(/\r/, ""); printf "%s\\n",$$0;}' ibi-certs/loadbalancer-serving-signer-key.pem)" \
+	ADMIN_CA_CERT="$(shell awk 'NF {sub(/\r/, ""); printf "%s\\n",$$0;}' ibi-certs/admin-kubeconfig-signer.crt)" \
+	INGRESS_CA_KEY="$(shell awk 'NF {sub(/\r/, ""); printf "%s\\n",$$0;}' ibi-certs/ingresskey-ingress-operator-key.pem)" \
 	envsubst < $(IBI_CLUSTER_CONFIG_TEMPLATE) > $@
 
 .PHONY: $(IBI_CLUSTER_CONFIG_MANIFESTS)
@@ -97,7 +103,7 @@ $(IBI_CLUSTER_CONFIG_MANIFESTS):
 ibi-config: $(IBI_CLUSTER_CONFIG_PATH) $(IBI_CLUSTER_CONFIG_MANIFESTS)
 
 .PHONY: ibi-config.iso
-ibi-config.iso: ibi-certs ibi-config ## Create ibi-config.iso
+ibi-config.iso: ibi-config ## Create ibi-config.iso
 	mkisofs -o $@ -R -V "relocation-config" $(IBI_CONFIG_DIR)
 	cp $@ $(LIBVIRT_IMAGE_PATH)
 

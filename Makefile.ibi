@@ -8,6 +8,7 @@ IBI_DOMAIN ?= example.com
 IBI_CLUSTER_NAME ?= other-test-sno
 IBI_HOSTNAME ?= $(IBI_VM_NAME)
 IBI_INSTALLATION_DISK ?= /dev/vda
+NET_NAME ?= default
 
 LCA_IMAGE ?= quay.io/openshift-kni/lifecycle-agent-operator:4.14.0
 COREOS_INSTALLER = quay.io/coreos/coreos-installer:latest
@@ -50,6 +51,17 @@ ibi-iso: $(RHCOS_LIVE_ISO) ibi-ignition.json ## Embed ignition into live ISO
 ibi-iso-clean: ## Delete ISO
 	-rm -f $(IBI_RHCOS_ISO_PATH) $(RHCOS_LIVE_ISO)
 
+# Configure dhcp and dns for host
+.PHONY: host-net-config
+host-net-config:
+	HOST_IP=$(shell virsh domifaddr ${IBI_VM_NAME} | grep ipv4 | awk -F " " '{print $$4}' | cut -d'/' -f1) \
+	CLUSTER_NAME=$(IBI_CLUSTER_NAME) \
+	BASE_DOMAIN=$(IBI_DOMAIN) \
+	NET_NAME=$(NET_NAME) \
+	HOST_NAME=$(IBI_VM_NAME) \
+	HOST_MAC=$(IBI_VM_MAC) \
+	ibi/host-net-config.sh
+
 .PHONY: ibi-vm
 ibi-vm: ## Provision IBI VM
 	@-mkdir -p $(HOME)/.kcli
@@ -58,8 +70,9 @@ ibi-vm: ## Provision IBI VM
 		-P memory=$(IBI_VM_MEMORY) \
 		-P numcpus=$(IBI_VM_CPUS) \
 		-P disks=['{"size": $(IBI_DISK_SIZE), "pool": "$(LIBVIRT_POOL)"}'] \
-		-P nets=['{"name": "default", "mac": "$(IBI_VM_MAC)"}'] \
+		-P nets=['{"name": "$(NET_NAME)", "mac": "$(IBI_VM_MAC)"}'] \
 		$(IBI_VM_NAME)
+		$(MAKE) host-net-config
 
 .PHONY: vm-clean
 ibi-vm-clean: ## Delete VM

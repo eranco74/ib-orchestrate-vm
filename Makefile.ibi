@@ -31,7 +31,7 @@ $(RHCOS_LIVE_ISO):
 	curl -L $(RHCOS_LIVE_ISO_URL) > $@
 
 .PHONY: ibi-ignition.json
-ibi-ignition.json: credentials/pull-secret.json credentials/backup-secret.json
+ibi-ignition.json: credentials/pull-secret.json credentials/backup-secret.json $(SSH_KEY_PUB_PATH)
 	SSH_PUBLIC_KEY="$(shell cat $(SSH_KEY_PUB_PATH))" \
 	SEED_IMAGE="$(SEED_IMAGE)" \
 	SEED_VERSION="$(SEED_VERSION)" \

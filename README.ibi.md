@@ -52,6 +52,7 @@ Jan 01 08:12:18 ibi systemd[1]: Finished SNO Image Based Installation.
 make ibi-config.iso
 make ibi-attach-config.iso
 ```
+after generating the ibi-config.iso you can find the kubeconfig for the installation under kubeconfig.ibi
 
 5. Reboot VM
 ```
@@ -62,7 +63,7 @@ After few minutes your cluster should be ready.
 
 6. Use oc to query the API:
 ```
-[coreos-installer]# oc get node
+[coreos-installer]# oc --kubeconfig kubeconfig.ibi get node
 NAME   STATUS   ROLES                         AGE   VERSION
 ibi    Ready    control-plane,master,worker   15m   v1.27.8+4fab27b
 ```

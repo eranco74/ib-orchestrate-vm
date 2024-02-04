@@ -17,7 +17,10 @@ fi
 sudo virsh net-update $NET_NAME $action ip-dhcp-host '<host mac="'$HOST_MAC'" name="'$HOST_NAME'" ip="'$HOST_IP'"/>' --live --parent-index 0
 
 # Update dnsmasq configuration
-grep -vx address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${HOST_IP} /etc/NetworkManager/dnsmasq.d/ibi.conf > $tmpfile
+IBI_DNSMASQ_CONF=/etc/NetworkManager/dnsmasq.d/ibi.conf
+if test -f $IBI_DNSMASQ_CONF ; then
+  grep -vx address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${HOST_IP} $IBI_DNSMASQ_CONF > $tmpfile
+fi
 echo address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${HOST_IP} >> $tmpfile
-cat $tmpfile | sudo tee /etc/NetworkManager/dnsmasq.d/ibi.conf
+cat $tmpfile | sudo tee $IBI_DNSMASQ_CONF
 sudo systemctl reload NetworkManager.service

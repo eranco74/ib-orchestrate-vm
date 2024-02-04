@@ -73,7 +73,7 @@ ibi-vm: ## Provision IBI VM
 		-P nets=['{"name": "$(NET_NAME)", "mac": "$(IBI_VM_MAC)"}'] \
 		$(IBI_VM_NAME)
 		@echo "Waiting for VM to get IP address"
-		until $$(shell virsh domifaddr ${IBI_VM_NAME} | grep ipv4 | awk -F " " '{print $$4}' | cut -d'/' -f1); do @sleep 2; done
+		sleep 5
 		$(MAKE) host-net-config
 
 .PHONY: vm-clean

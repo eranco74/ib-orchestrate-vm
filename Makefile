@@ -144,6 +144,10 @@ seed-vm-restore: vm-restore ## Restore a copy of seed VM disk image (qcow2 file)
 seed-vm-recert: VM_NAME=$(SEED_VM_NAME)
 seed-vm-recert: vm-recert ## Run recert to extend certificates in seed VM
 
+.PHONY: seed-vm-remove
+seed-vm-remove: VM_NAME=$(SEED_VM_NAME)
+seed-vm-remove: vm-remove ## Remove the recipient VM and the storage associated with it
+
 .PHONY: seed-lifecycle-agent-deploy
 seed-lifecycle-agent-deploy: CLUSTER=$(SEED_VM_NAME)
 seed-lifecycle-agent-deploy: lifecycle-agent-deploy
@@ -200,6 +204,10 @@ recipient-vm-recert: vm-recert ## Run recert to extend certificates in recipient
 recipient-vm-restore: VM_NAME=$(RECIPIENT_VM_NAME)
 recipient-vm-restore: VERSION=$(RECIPIENT_VERSION)
 recipient-vm-restore: vm-restore ## Restore a copy of recipient VM disk image (qcow2 file)
+
+.PHONY: recipient-vm-remove
+recipient-vm-remove: VM_NAME=$(RECIPIENT_VM_NAME)
+recipient-vm-remove: vm-remove ## Remove the recipient VM and the storage associated with it
 
 .PHONY: recipient-lifecycle-agent-deploy
 recipient-lifecycle-agent-deploy: CLUSTER=$(RECIPIENT_VM_NAME)
@@ -344,6 +352,12 @@ vm-recert:
 			echo -n .; sleep 10; \
 	done; \
 	echo " DONE"
+
+.PHONY: vm-remove
+vm-remove:
+	echo "Destroying and unregistering $(VM_NAME)"
+	$(virsh) destroy $(VM_NAME)
+	$(virsh) undefine $(VM_NAME) --remove-all-storage
 
 .PHONY: help
 help:

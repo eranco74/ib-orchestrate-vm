@@ -54,7 +54,7 @@ oc = oc --kubeconfig $(SNO_KUBECONFIG)
 
 $(SSH_KEY_DIR):
 	@echo Creating SSH key dir
-	mkdir $@
+	mkdir -p $@
 
 $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 	@echo "No private key $@ found, generating a private-public pair"

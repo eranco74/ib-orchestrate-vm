@@ -5,6 +5,7 @@ IMAGE_BASED_DIR = .
 SNO_DIR = ./bip-orchestrate-vm
 
 -include .config-override
+include network.env
 
 default: help
 
@@ -17,20 +18,20 @@ endif
 VIRSH_CONNECT ?= qemu:///system
 virsh = virsh --connect=$(VIRSH_CONNECT)
 
-CLUSTER_DOMAIN ?= redhat.com
 SEED_VM_NAME  ?= seed
+SEED_DOMAIN ?= $(NET_SEED_DOMAIN)
 SEED_VM_IP  ?= 192.168.126.10
 SEED_VERSION ?= 4.14.6
 SEED_MAC ?= 52:54:00:ee:42:e1
 
 RECIPIENT_VM_NAME ?= recipient
-RECIPIENT_VM_IP  ?= 192.168.126.99
+RECIPIENT_DOMAIN ?= $(NET_RECIPIENT_DOMAIN)
+RECIPIENT_VM_IP  ?= 192.168.127.99
 RECIPIENT_VERSION ?= 4.14.1
 RECIPIENT_MAC ?= 52:54:00:fa:ba:da
 
 LIBVIRT_IMAGE_PATH := $(or ${LIBVIRT_IMAGE_PATH},/var/lib/libvirt/images)
 
-MACHINE_NETWORK ?= 192.168.126.0/24
 CPU_CORE ?= 16
 RAM_MB ?= 32768
 LCA_IMAGE ?= quay.io/openshift-kni/lifecycle-agent-operator:latest
@@ -64,14 +65,18 @@ $(SSH_KEY_PRIV_PATH): $(SSH_KEY_DIR)
 
 $(SSH_KEY_PUB_PATH): $(SSH_KEY_PRIV_PATH)
 
+.PHONY: bip-orchestrate-vm
 bip-orchestrate-vm:
-	rm -rf $(SNO_DIR)
-	git clone https://github.com/rh-ecosystem-edge/bip-orchestrate-vm
+	@if [ -d $@ ]; then \
+		git -C $@ pull ;\
+	else \
+		git clone https://github.com/rh-ecosystem-edge/bip-orchestrate-vm ;\
+	fi
 
 .PHONY: lifecycle-agent
 lifecycle-agent:
-	@if [ -d lifecycle-agent ]; then \
-		git -C lifecycle-agent pull ;\
+	@if [ -d $@ ]; then \
+		git -C $@ pull ;\
 	else \
 		git clone https://github.com/openshift-kni/lifecycle-agent ;\
 	fi
@@ -120,6 +125,12 @@ seed-vm-create: VM_NAME=$(SEED_VM_NAME)
 seed-vm-create: HOST_IP=$(SEED_VM_IP)
 seed-vm-create: RELEASE_VERSION=$(SEED_VERSION)
 seed-vm-create: MAC_ADDRESS=$(SEED_MAC)
+seed-vm-create: BASE_DOMAIN=$(SEED_DOMAIN)
+seed-vm-create: NET_NAME=$(NET_SEED_NAME)
+seed-vm-create: NET_BRIDGE_NAME=$(NET_SEED_BRIDGE_NAME)
+seed-vm-create: NET_MAC=$(NET_SEED_MAC)
+seed-vm-create: NET_UUID=$(NET_SEED_UUID)
+seed-vm-create: MACHINE_NETWORK=$(NET_SEED_NETWORK)
 seed-vm-create: start-iso-abi ## Install seed SNO cluster
 
 .PHONY: wait-for-seed
@@ -153,18 +164,7 @@ seed-lifecycle-agent-deploy: CLUSTER=$(SEED_VM_NAME)
 seed-lifecycle-agent-deploy: lifecycle-agent-deploy
 
 .PHONY: seed-cluster-prepare
-seed-cluster-prepare: dnsmasq-workaround seed-varlibcontainers seed-lifecycle-agent-deploy ## Prepare seed VM cluster
-
-generate-dnsmasq-site-policy-section.sh:
-	curl -sOL https://raw.githubusercontent.com/openshift-kni/lifecycle-agent/main/hack/generate-dnsmasq-site-policy-section.sh
-	chmod +x $@
-
-.PHONY: dnsmasq-workaround
-# dnsmasq workaround until https://github.com/openshift/assisted-service/pull/5658 is in assisted
-dnsmasq-workaround: SEED_CLUSTER_NAME ?= $(SEED_VM_NAME).redhat.com
-dnsmasq-workaround: CLUSTER=$(SEED_VM_NAME)
-dnsmasq-workaround: generate-dnsmasq-site-policy-section.sh
-	./generate-dnsmasq-site-policy-section.sh --name $(SEED_VM_NAME) --domain $(CLUSTER_DOMAIN) --ip $(SEED_VM_IP) --mc | $(oc) apply -f -
+seed-cluster-prepare: seed-varlibcontainers seed-lifecycle-agent-deploy ## Prepare seed VM cluster
 
 .PHONY: seed-varlibcontainers
 seed-varlibcontainers: CLUSTER=$(SEED_VM_NAME)
@@ -181,6 +181,12 @@ recipient-vm-create: VM_NAME=$(RECIPIENT_VM_NAME)
 recipient-vm-create: HOST_IP=$(RECIPIENT_VM_IP)
 recipient-vm-create: RELEASE_VERSION=$(RECIPIENT_VERSION)
 recipient-vm-create: MAC_ADDRESS=$(RECIPIENT_MAC)
+recipient-vm-create: BASE_DOMAIN=$(RECIPIENT_DOMAIN)
+recipient-vm-create: NET_NAME=$(NET_RECIPIENT_NAME)
+recipient-vm-create: NET_BRIDGE_NAME=$(NET_RECIPIENT_BRIDGE_NAME)
+recipient-vm-create: NET_MAC=$(NET_RECIPIENT_MAC)
+recipient-vm-create: NET_UUID=$(NET_RECIPIENT_UUID)
+recipient-vm-create: MACHINE_NETWORK=$(NET_RECIPIENT_NETWORK)
 recipient-vm-create: start-iso-abi ## Install recipient SNO cluster
 
 .PHONY: wait-for-recipient
@@ -252,7 +258,55 @@ start-iso-abi: checkenv bip-orchestrate-vm
 		RELEASE_VERSION=$(RELEASE_VERSION) \
 		CPU_CORE=$(CPU_CORE) \
 		RELEASE_ARCH=$(RELEASE_ARCH) \
-		RAM_MB=$(RAM_MB)
+		RAM_MB=$(RAM_MB) \
+		BASE_DOMAIN=$(BASE_DOMAIN) \
+		NET_NAME=$(NET_NAME) \
+		NET_BRIDGE_NAME=$(NET_BRIDGE_NAME) \
+		NET_UUID=$(NET_UUID) \
+		NET_MAC=$(NET_MAC)
+
+# Network used for the seed VM
+network_seed: BASE_DOMAIN=$(NET_SEED_DOMAIN)
+network_seed: NET_NAME=$(NET_SEED_NAME)
+network_seed: NET_BRIDGE_NAME=$(NET_SEED_BRIDGE_NAME)
+network_seed: NET_MAC=$(NET_SEED_MAC)
+network_seed: NET_UUID=$(NET_SEED_UUID)
+network_seed: MACHINE_NETWORK=$(NET_SEED_NETWORK)
+network_seed: VM_NAME=$(SEED_VM_NAME)
+network_seed: HOST_IP=$(SEED_VM_IP)
+network_seed: MAC_ADDRESS=$(SEED_MAC)
+network_seed: network
+
+# Network used for the recipients (recipient and ibi)
+network_recipient: BASE_DOMAIN=$(NET_RECIPIENT_DOMAIN)
+network_recipient: NET_NAME=$(NET_RECIPIENT_NAME)
+network_recipient: NET_BRIDGE_NAME=$(NET_RECIPIENT_BRIDGE_NAME)
+network_recipient: NET_MAC=$(NET_RECIPIENT_MAC)
+network_recipient: NET_UUID=$(NET_RECIPIENT_UUID)
+network_recipient: MACHINE_NETWORK=$(NET_RECIPIENT_NETWORK)
+network_recipient: VM_NAME=$(RECIPIENT_VM_NAME)
+network_recipient: HOST_IP=$(RECIPIENT_VM_IP)
+network_recipient: MAC_ADDRESS=$(RECIPIENT_MAC)
+network_recipient: network
+
+# Call network creation in bip-orchestrate-vm repo
+network:
+	make -C $(SNO_DIR) $@ \
+		VM_NAME=$(VM_NAME) \
+		HOST_IP=$(HOST_IP) \
+		MACHINE_NETWORK=$(MACHINE_NETWORK) \
+		CLUSTER_NAME=$(VM_NAME) \
+		HOST_MAC=$(MAC_ADDRESS) \
+		INSTALLER_WORKDIR=workdir-$(VM_NAME)\
+		RELEASE_VERSION=$(RELEASE_VERSION) \
+		CPU_CORE=$(CPU_CORE) \
+		RELEASE_ARCH=$(RELEASE_ARCH) \
+		RAM_MB=$(RAM_MB) \
+		BASE_DOMAIN=$(BASE_DOMAIN) \
+		NET_NAME=$(NET_NAME) \
+		NET_BRIDGE_NAME=$(NET_BRIDGE_NAME) \
+		NET_UUID=$(NET_UUID) \
+		NET_MAC=$(NET_MAC)
 
 .PHONY: wait-for-install-complete
 wait-for-install-complete:

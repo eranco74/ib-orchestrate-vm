@@ -5,6 +5,7 @@ IMAGE_BASED_DIR = .
 SNO_DIR = ./bip-orchestrate-vm
 
 -include .config-override
+include network.env
 
 default: help
 
@@ -17,28 +18,14 @@ endif
 VIRSH_CONNECT ?= qemu:///system
 virsh = virsh --connect=$(VIRSH_CONNECT)
 
-NET_0_NAME ?= ib-orchestrate-0
-NET_0_BRIDGE_NAME ?= ibo0
-NET_0_DOMAIN ?= ibo0.redhat.com
-NET_0_UUID ?= 268ce8c5-afa5-4076-8c48-963db001bf7d
-NET_0_MAC ?= 52:54:00:1b:1b:00
-NET_0_NETWORK ?= 192.168.126.0/24
-
-NET_1_NAME ?= ib-orchestrate-1
-NET_1_BRIDGE_NAME ?= ibo1
-NET_1_DOMAIN ?= ibo1.redhat.com
-NET_1_UUID ?= 12a4d419-dd03-43c2-8414-ad3339913c02
-NET_1_MAC ?= 52:54:00:1b:1b:01
-NET_1_NETWORK ?= 192.168.127.0/24
-
 SEED_VM_NAME  ?= seed
-SEED_DOMAIN ?= $(NET_0_DOMAIN)
+SEED_DOMAIN ?= $(NET_SEED_DOMAIN)
 SEED_VM_IP  ?= 192.168.126.10
 SEED_VERSION ?= 4.14.6
 SEED_MAC ?= 52:54:00:ee:42:e1
 
 RECIPIENT_VM_NAME ?= recipient
-RECIPIENT_DOMAIN ?= $(NET_1_DOMAIN)
+RECIPIENT_DOMAIN ?= $(NET_RECIPIENT_DOMAIN)
 RECIPIENT_VM_IP  ?= 192.168.127.99
 RECIPIENT_VERSION ?= 4.14.1
 RECIPIENT_MAC ?= 52:54:00:fa:ba:da
@@ -139,11 +126,11 @@ seed-vm-create: HOST_IP=$(SEED_VM_IP)
 seed-vm-create: RELEASE_VERSION=$(SEED_VERSION)
 seed-vm-create: MAC_ADDRESS=$(SEED_MAC)
 seed-vm-create: BASE_DOMAIN=$(SEED_DOMAIN)
-seed-vm-create: NET_NAME=$(NET_0_NAME)
-seed-vm-create: NET_BRIDGE_NAME=$(NET_0_BRIDGE_NAME)
-seed-vm-create: NET_MAC=$(NET_0_MAC)
-seed-vm-create: NET_UUID=$(NET_0_UUID)
-seed-vm-create: MACHINE_NETWORK=$(NET_0_NETWORK)
+seed-vm-create: NET_NAME=$(NET_SEED_NAME)
+seed-vm-create: NET_BRIDGE_NAME=$(NET_SEED_BRIDGE_NAME)
+seed-vm-create: NET_MAC=$(NET_SEED_MAC)
+seed-vm-create: NET_UUID=$(NET_SEED_UUID)
+seed-vm-create: MACHINE_NETWORK=$(NET_SEED_NETWORK)
 seed-vm-create: start-iso-abi ## Install seed SNO cluster
 
 .PHONY: wait-for-seed
@@ -195,11 +182,11 @@ recipient-vm-create: HOST_IP=$(RECIPIENT_VM_IP)
 recipient-vm-create: RELEASE_VERSION=$(RECIPIENT_VERSION)
 recipient-vm-create: MAC_ADDRESS=$(RECIPIENT_MAC)
 recipient-vm-create: BASE_DOMAIN=$(RECIPIENT_DOMAIN)
-recipient-vm-create: NET_NAME=$(NET_1_NAME)
-recipient-vm-create: NET_BRIDGE_NAME=$(NET_1_BRIDGE_NAME)
-recipient-vm-create: NET_MAC=$(NET_1_MAC)
-recipient-vm-create: NET_UUID=$(NET_1_UUID)
-recipient-vm-create: MACHINE_NETWORK=$(NET_1_NETWORK)
+recipient-vm-create: NET_NAME=$(NET_RECIPIENT_NAME)
+recipient-vm-create: NET_BRIDGE_NAME=$(NET_RECIPIENT_BRIDGE_NAME)
+recipient-vm-create: NET_MAC=$(NET_RECIPIENT_MAC)
+recipient-vm-create: NET_UUID=$(NET_RECIPIENT_UUID)
+recipient-vm-create: MACHINE_NETWORK=$(NET_RECIPIENT_NETWORK)
 recipient-vm-create: start-iso-abi ## Install recipient SNO cluster
 
 .PHONY: wait-for-recipient
@@ -278,29 +265,29 @@ start-iso-abi: checkenv bip-orchestrate-vm
 		NET_UUID=$(NET_UUID) \
 		NET_MAC=$(NET_MAC)
 
-# Network 0 is used for the seed VM
-network_0: BASE_DOMAIN=$(NET_0_DOMAIN)
-network_0: NET_NAME=$(NET_0_NAME)
-network_0: NET_BRIDGE_NAME=$(NET_0_BRIDGE_NAME)
-network_0: NET_MAC=$(NET_0_MAC)
-network_0: NET_UUID=$(NET_0_UUID)
-network_1: MACHINE_NETWORK=$(NET_0_NETWORK)
-network_0: VM_NAME=$(SEED_VM_NAME)
-network_0: HOST_IP=$(SEED_VM_IP)
-network_0: MAC_ADDRESS=$(SEED_MAC)
-network_0: network
+# Network used for the seed VM
+network_seed: BASE_DOMAIN=$(NET_SEED_DOMAIN)
+network_seed: NET_NAME=$(NET_SEED_NAME)
+network_seed: NET_BRIDGE_NAME=$(NET_SEED_BRIDGE_NAME)
+network_seed: NET_MAC=$(NET_SEED_MAC)
+network_seed: NET_UUID=$(NET_SEED_UUID)
+network_seed: MACHINE_NETWORK=$(NET_SEED_NETWORK)
+network_seed: VM_NAME=$(SEED_VM_NAME)
+network_seed: HOST_IP=$(SEED_VM_IP)
+network_seed: MAC_ADDRESS=$(SEED_MAC)
+network_seed: network
 
-# Network 1 is used for the recipients (recipient and ibi)
-network_1: BASE_DOMAIN=$(NET_1_DOMAIN)
-network_1: NET_NAME=$(NET_1_NAME)
-network_1: NET_BRIDGE_NAME=$(NET_1_BRIDGE_NAME)
-network_1: NET_MAC=$(NET_1_MAC)
-network_1: NET_UUID=$(NET_1_UUID)
-network_1: MACHINE_NETWORK=$(NET_1_NETWORK)
-network_1: VM_NAME=$(RECIPIENT_VM_NAME)
-network_1: HOST_IP=$(RECIPIENT_VM_IP)
-network_1: MAC_ADDRESS=$(RECIPIENT_MAC)
-network_1: network
+# Network used for the recipients (recipient and ibi)
+network_recipient: BASE_DOMAIN=$(NET_RECIPIENT_DOMAIN)
+network_recipient: NET_NAME=$(NET_RECIPIENT_NAME)
+network_recipient: NET_BRIDGE_NAME=$(NET_RECIPIENT_BRIDGE_NAME)
+network_recipient: NET_MAC=$(NET_RECIPIENT_MAC)
+network_recipient: NET_UUID=$(NET_RECIPIENT_UUID)
+network_recipient: MACHINE_NETWORK=$(NET_RECIPIENT_NETWORK)
+network_recipient: VM_NAME=$(RECIPIENT_VM_NAME)
+network_recipient: HOST_IP=$(RECIPIENT_VM_IP)
+network_recipient: MAC_ADDRESS=$(RECIPIENT_MAC)
+network_recipient: network
 
 # Call network creation in bip-orchestrate-vm repo
 network:

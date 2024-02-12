@@ -21,7 +21,7 @@ IBI_CONFIG_DIR = ibi-config
 IBI_CLUSTER_CONFIG_TEMPLATE = ibi-manifest.template
 IBI_CLUSTER_CONFIG_PATH = $(IBI_CONFIG_DIR)/cluster-configuration/manifest.json
 IBI_CLUSTER_CONFIG_MANIFESTS = $(IBI_CONFIG_DIR)/cluster-configuration/manifests
-NET_NAME = $(NET_1_NAME)
+NET_NAME = $(NET_RECIPIENT_NAME)
 
 # Use kcli - TODO: Use virsh or similar
 LIBVIRT_POOL = default

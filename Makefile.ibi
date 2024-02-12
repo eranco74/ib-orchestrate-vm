@@ -9,13 +9,13 @@ IBI_CLUSTER_NAME ?= other-test-sno
 IBI_HOSTNAME ?= $(IBI_VM_NAME)
 IBI_INSTALLATION_DISK ?= /dev/vda
 NET_NAME ?= default
-
+IBI_WORK_DIR ?= ibi-iso-work-dir
 LCA_IMAGE ?= quay.io/openshift-kni/lifecycle-agent-operator:4.14.0
 COREOS_INSTALLER = quay.io/coreos/coreos-installer:latest
-RHCOS_LIVE_ISO_URL = https://mirror.openshift.com/pub/openshift-v4/amd64/dependencies/rhcos/latest/rhcos-live.x86_64.iso
-RHCOS_LIVE_ISO = rhcos-live.x86_64.iso
+IB_CLI = ./bin/ib-cli
+RHCOS_LIVE_ISO = $(IBI_WORK_DIR)/rhcos-live.x86_64.iso
 
-SSH_PUBLIC_KEY = $(HOME)/.ssh/id_rsa.pub
+SSH_PUBLIC_KEY ?= $(HOME)/.ssh/id_rsa.pub
 IBI_RHCOS_ISO_PATH = $(LIBVIRT_IMAGE_PATH)/rhcos-$(IBI_VM_NAME).iso
 IBI_CONFIG_DIR = ibi-config
 IBI_CLUSTER_CONFIG_TEMPLATE = ibi-manifest.template
@@ -27,29 +27,27 @@ LIBVIRT_POOL = default
 KCLI_IMAGE = quay.io/karmab/kcli
 kcli = podman run --net host -i --rm --security-opt label=disable -v $(LIBVIRT_IMAGE_PATH):$(LIBVIRT_IMAGE_PATH) -v $(HOME)/.ssh:/root/.ssh -v $(HOME)/.kcli:/root/.kcli -v /var/run/libvirt:/var/run/libvirt $(KCLI_IMAGE)
 
-$(RHCOS_LIVE_ISO):
-	curl -L $(RHCOS_LIVE_ISO_URL) > $@
-
-.PHONY: ibi-ignition.json
-ibi-ignition.json: credentials/pull-secret.json credentials/backup-secret.json $(SSH_KEY_PUB_PATH)
-	SSH_PUBLIC_KEY="$(shell cat $(SSH_KEY_PUB_PATH))" \
-	SEED_IMAGE="$(SEED_IMAGE)" \
-	SEED_VERSION="$(SEED_VERSION)" \
-	LCA_IMAGE="$(LCA_IMAGE)" \
-	INSTALLATION_DISK="$(IBI_INSTALLATION_DISK)" \
-	  envsubst < ibi-butane-ignition.yaml | \
-		podman run -i -v $(shell pwd):/data/:rw,Z  --rm quay.io/coreos/butane:release --pretty --strict -d /data > $@
+$(IB_CLI):
+	mkdir -p bin
+	podman run -it -v `pwd`:/data --entrypoint cp $(LCA_IMAGE) /usr/local/bin/ib-cli ./data/bin/
 
 .PHONY: ibi-iso
-ibi-iso: $(RHCOS_LIVE_ISO) ibi-ignition.json ## Embed ignition into live ISO
-	-rm -f rhcos-ibi.iso
-	podman run -v $(shell pwd):/data:rw,Z $(COREOS_INSTALLER) iso ignition embed -i /data/ibi-ignition.json -o /data/rhcos-ibi.iso /data/$(RHCOS_LIVE_ISO)
-	cp rhcos-ibi.iso "$(IBI_RHCOS_ISO_PATH)"
-	chmod a+r "$(IBI_RHCOS_ISO_PATH)"
+ibi-iso: $(IB_CLI) credentials/pull-secret.json credentials/backup-secret.json credentials/ssh_public.key
+	mkdir -p $(IBI_WORK_DIR)
+	$(IB_CLI) create-iso --installation-disk $(IBI_INSTALLATION_DISK) \
+    	--lca-image $(LCA_IMAGE) \
+        --seed-image $(SEED_IMAGE) \
+        --seed-version $(SEED_VERSION) \
+        --auth-file credentials/backup-secret.json \
+        --pullsecret-file credentials/pull-secret.json \
+        --ssh-public-key-file $(SSH_PUBLIC_KEY) \
+        --dir ./$(IBI_WORK_DIR)
+	sudo cp ./$(IBI_WORK_DIR)/rhcos-ibi.iso "$(IBI_RHCOS_ISO_PATH)"
+	sudo chmod a+r "$(IBI_RHCOS_ISO_PATH)"
 
 .PHONY: ibi-iso-clean
 ibi-iso-clean: ## Delete ISO
-	-rm -f $(IBI_RHCOS_ISO_PATH) $(RHCOS_LIVE_ISO)
+	-sudo rm -f $(IBI_RHCOS_ISO_PATH) $(IBI_WORK_DIR)
 
 # Configure dhcp and dns for host
 .PHONY: host-net-config

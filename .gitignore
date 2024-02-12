@@ -17,5 +17,5 @@ ibi-config.iso
 ibi-config/cluster-configuration/manifest.json
 kubeconfig.ibi
 ibi-ignition.json
-rhcos-ibi.iso
-rhcos-live.x86_64.iso
+ibi-iso-work-dir/
+bin/

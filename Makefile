@@ -172,10 +172,8 @@ generate-dnsmasq-site-policy-section.sh:
 
 .PHONY: dnsmasq-workaround
 # dnsmasq workaround until https://github.com/openshift/assisted-service/pull/5658 is in assisted
-dnsmasq-workaround: SEED_CLUSTER_NAME ?= $(SEED_VM_NAME).redhat.com
-dnsmasq-workaround: CLUSTER=$(SEED_VM_NAME)
 dnsmasq-workaround: generate-dnsmasq-site-policy-section.sh
-	./generate-dnsmasq-site-policy-section.sh --name $(SEED_VM_NAME) --domain $(CLUSTER_DOMAIN) --ip $(SEED_VM_IP) --mc | $(oc) apply -f -
+	./generate-dnsmasq-site-policy-section.sh --name $(SEED_VM_NAME) --domain $(NET_SEED_DOMAIN) --ip $(SEED_VM_IP) --mc | $(oc) apply -f -
 
 .PHONY: seed-varlibcontainers
 seed-varlibcontainers: CLUSTER=$(SEED_VM_NAME)

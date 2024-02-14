@@ -21,7 +21,7 @@ virsh = virsh --connect=$(VIRSH_CONNECT)
 SEED_VM_NAME  ?= seed
 SEED_DOMAIN ?= $(NET_SEED_DOMAIN)
 SEED_VM_IP  ?= 192.168.126.10
-SEED_VERSION ?= 4.14.6
+SEED_VERSION ?= 4.15.0-rc.5
 SEED_MAC ?= 52:54:00:ee:42:e1
 
 RECIPIENT_VM_NAME ?= recipient

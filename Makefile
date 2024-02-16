@@ -30,6 +30,8 @@ RECIPIENT_VM_IP  ?= 192.168.127.99
 RECIPIENT_VERSION ?= 4.14.1
 RECIPIENT_MAC ?= 52:54:00:fa:ba:da
 
+UPGRADE_TIMEOUT ?= 30m
+
 LIBVIRT_IMAGE_PATH := $(or ${LIBVIRT_IMAGE_PATH},/var/lib/libvirt/images)
 
 CPU_CORE ?= 16
@@ -374,7 +376,7 @@ lca-stage-upgrade:
 .PHONY: lca-wait-for-upgrade
 lca-wait-for-upgrade: CLUSTER=$(RECIPIENT_VM_NAME)
 lca-wait-for-upgrade:
-	$(oc) wait --timeout=30m --for=condition=UpgradeCompleted=true ibu upgrade
+	$(oc) wait --timeout=$(UPGRADE_TIMEOUT) --for=condition=UpgradeCompleted=true ibu upgrade
 
 .PHONY: ssh
 ssh: $(SSH_KEY_PRIV_PATH)

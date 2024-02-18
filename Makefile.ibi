@@ -20,7 +20,7 @@ IBI_CONFIG_DIR = ibi-config
 IBI_CLUSTER_CONFIG_TEMPLATE = ibi-manifest.template
 IBI_CLUSTER_CONFIG_PATH = $(IBI_CONFIG_DIR)/cluster-configuration/manifest.json
 IBI_CLUSTER_CONFIG_MANIFESTS = $(IBI_CONFIG_DIR)/cluster-configuration/manifests
-NET_NAME = $(NET_RECIPIENT_NAME)
+NET_NAME ?= default
 
 # Use kcli - TODO: Use virsh or similar
 LIBVIRT_POOL = default
@@ -29,10 +29,10 @@ kcli = podman run --net host -i --rm --security-opt label=disable -v $(LIBVIRT_I
 
 $(IB_CLI):
 	mkdir -p bin
-	podman run -it -v `pwd`:/data --entrypoint cp $(LCA_IMAGE) /usr/local/bin/ib-cli ./data/bin/
+	podman run -it -v `pwd`:/data --rm --entrypoint cp $(LCA_IMAGE) /usr/local/bin/ib-cli ./data/bin/
 
 .PHONY: ibi-iso
-ibi-iso: $(IB_CLI) credentials/pull-secret.json credentials/backup-secret.json credentials/ssh_public.key
+ibi-iso: $(IB_CLI) credentials/pull-secret.json credentials/backup-secret.json
 	mkdir -p $(IBI_WORK_DIR)
 	$(IB_CLI) create-iso --installation-disk $(IBI_INSTALLATION_DISK) \
     	--lca-image $(LCA_IMAGE) \
@@ -47,7 +47,7 @@ ibi-iso: $(IB_CLI) credentials/pull-secret.json credentials/backup-secret.json c
 
 .PHONY: ibi-iso-clean
 ibi-iso-clean: ## Delete ISO
-	-sudo rm -f $(IBI_RHCOS_ISO_PATH) $(IBI_WORK_DIR)
+	-sudo rm -rf $(IBI_RHCOS_ISO_PATH) $(IBI_WORK_DIR) $(IB_CLI)
 
 # Configure dhcp and dns for host
 .PHONY: host-net-config

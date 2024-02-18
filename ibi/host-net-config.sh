@@ -19,7 +19,8 @@ sudo virsh net-update $NET_NAME $action ip-dhcp-host '<host mac="'$HOST_MAC'" na
 # Update dnsmasq configuration
 IBI_DNSMASQ_CONF=/etc/NetworkManager/dnsmasq.d/ibi.conf
 if test -f $IBI_DNSMASQ_CONF ; then
-  grep -vx address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${HOST_IP} $IBI_DNSMASQ_CONF > $tmpfile
+  # copy existing dnsmasq conf to temp file, exclude the cluster api DNS
+  grep -vx address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${HOST_IP} $IBI_DNSMASQ_CONF > $tmpfile || touch $tmpfile
 fi
 echo address=/api.${CLUSTER_NAME}.${BASE_DOMAIN}/${HOST_IP} >> $tmpfile
 cat $tmpfile | sudo tee $IBI_DNSMASQ_CONF

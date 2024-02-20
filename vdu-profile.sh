@@ -2,7 +2,7 @@
 
 set -e # Halt on error
 
-machineconfigs="50-performance-openshift-node-performance-profile 99-master-generated-kubelet"
+machineconfigs="50-performance-openshift-node-performance-profile 99-master-generated-kubelet 05-kdump-config-master 06-kdump-enable-master"
 subscriptions="
 openshift-local-storage/local-storage-operator
 openshift-logging/cluster-logging
@@ -14,6 +14,7 @@ openshift-sriov-network-operator/sriov-network-operator-subscription
 # and wait for everything to stabilize before continuing, otherwise
 # the rest of the VDU configuration could run into errors with OLM jobs
 oc apply -f ./vdu/01-node-tuning.yaml
+oc apply -f ./vdu/01-kdump.yaml
 
 # Wait for generated machineconfig to have performanceprofile and tuned baked in
 for mc in ${machineconfigs}; do

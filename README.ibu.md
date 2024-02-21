@@ -23,20 +23,20 @@ make sno-upgrade SEED_IMAGE=$SEED_IMAGE
 ```
 
 ## Prerequisites
-
-- NMState v2.2.10 or above, this is required due to the nmstate config used in the agent-config.yaml
-```bash
-sudo dnf copr enable nmstate/nmstate-git
-sudo dnf install nmstate
-- Set `PULL_SECRET` environment variable to the contents of your cluster pull secret
-- Set `BACKUP_SECRET` environment variable with the credentials needed to push/pull the seed image, in standard pull-secret format
-```
-
+- 
 - virt-install
 
 ```bash
 sudo dnf install virt-install
 ```
+
+- In case you don't have nmstatectl installed please install it
+```bash
+sudo dnf install nmstate
+```
+
+- Set `PULL_SECRET` environment variable to the contents of your cluster pull secret
+- Set `BACKUP_SECRET` environment variable with the credentials needed to push/pull the seed image, in standard pull-secret format
 
 ## Fedora prerequisites
 

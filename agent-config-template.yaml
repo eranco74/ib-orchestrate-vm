@@ -19,4 +19,12 @@ hosts:
             address:
               - ip: ${HOST_IP}
                 prefix-length: 24
-            dhcp: true
+      routes:
+        config:
+        - next-hop-address: ${HOST_ROUTE}
+          next-hop-interface: eno1
+          destination: 0.0.0.0/0
+      dns-resolver:
+        config:
+          server:
+            - ${HOST_ROUTE}

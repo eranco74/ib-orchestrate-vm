@@ -27,9 +27,11 @@ LIBVIRT_POOL = default
 KCLI_IMAGE = quay.io/karmab/kcli
 kcli = podman run --net host -i --rm --security-opt label=disable -v $(LIBVIRT_IMAGE_PATH):$(LIBVIRT_IMAGE_PATH) -v $(HOME)/.ssh:/root/.ssh -v $(HOME)/.kcli:/root/.kcli -v /var/run/libvirt:/var/run/libvirt $(KCLI_IMAGE)
 
+.PHONY: $(IB_CLI)
 $(IB_CLI):
 	mkdir -p bin
-	podman run -it -v `pwd`:/data --rm --entrypoint cp $(LCA_IMAGE) /usr/local/bin/ib-cli ./data/bin/
+	podman pull $(LCA_IMAGE)
+	podman run -it -v $(shell pwd):/data:Z --rm --entrypoint cp $(LCA_IMAGE) /usr/local/bin/ib-cli ./data/bin/
 
 .PHONY: ibi-iso
 ibi-iso: $(IB_CLI) credentials/pull-secret.json credentials/backup-secret.json

@@ -258,6 +258,7 @@ start-iso-abi: checkenv bip-orchestrate-vm check-old-net
 		VM_NAME=$(VM_NAME) \
 		HOST_IP=$(HOST_IP) \
 		HOST_MAC=$(MAC_ADDRESS) \
+		HOST_ROUTE=$(shell virsh net-dumpxml ib-orchestrate-0|grep '<ip '|xargs -n1|grep address | cut -d = -f 2) \
 		envsubst > $(SNO_DIR)/agent-config.yaml
 	make -C $(SNO_DIR) $@ \
 		VM_NAME=$(VM_NAME) \
